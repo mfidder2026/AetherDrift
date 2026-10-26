@@ -1,0 +1,42 @@
+[project]
+name = "aether-engine"
+version = "0.1.0"
+description = "AetherDrift inference engine: OpenAI-compatible API on MLX with dynamic weight streaming"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mlx>=0.29",
+    "mlx-lm>=0.28",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pydantic>=2.9",
+    "psutil>=6.1",
+]
+
+[project.scripts]
+aether-engine = "aether.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "openai>=3.38.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aether"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

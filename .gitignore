@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+models/
+bench/reports/*.json
+# Xcode
+app/**/xcuserdata/
+app/**/DerivedData/
+*.xcuserstate
+app/build/
+app/AetherDrift.xcodeproj/
