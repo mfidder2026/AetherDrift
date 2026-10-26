@@ -61,3 +61,15 @@ def test_normal_does_nothing(setup) -> None:
     guard, worker, events, level, _ = setup
     guard.check()
     assert worker.relieved == [] and events.since(0) == []
+
+
+def test_wait_for_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    available = iter([1, 2, 10])
+    monkeypatch.setattr(
+        guard_mod.psutil, "virtual_memory", lambda: SimpleNamespace(available=next(available))
+    )
+    assert guard_mod.wait_for_memory(5, timeout_s=5, poll_s=0)
+    monkeypatch.setattr(guard_mod.psutil, "virtual_memory", lambda: SimpleNamespace(available=1))
+    assert not guard_mod.wait_for_memory(5, timeout_s=0.01, poll_s=0)

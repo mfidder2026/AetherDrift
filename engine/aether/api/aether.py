@@ -108,17 +108,8 @@ async def load(body: LoadBody, request: Request) -> dict[str, Any]:
     if body.wait:
         return await asyncio.wrap_future(fut)
 
-    def _report(f: Any) -> None:
-        if (exc := f.exception()) is not None:
-            err = (
-                exc.to_dict()
-                if isinstance(exc, EngineError)
-                else {"code": "internal", "message": str(exc)}
-            )
-            engine.stats.update("model", state="error")
-            engine.events.publish("error", source="load", model=body.id, **err)
-
-    fut.add_done_callback(_report)
+    # Failures are reported by the worker (state "error" + an "error" event).
+    fut.add_done_callback(lambda f: f.exception())
     return {"id": body.id, "state": "loading"}
 
 

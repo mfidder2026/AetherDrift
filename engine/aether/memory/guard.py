@@ -67,3 +67,15 @@ class MemoryGuard:
             except Exception:
                 log.exception("memory guard check failed")
             await asyncio.sleep(POLL_S)
+
+
+def wait_for_memory(need_bytes: int, timeout_s: float = 60.0, poll_s: float = 0.5) -> bool:
+    """Wait until macOS can give `need_bytes` without swapping (e.g. while a previous engine
+    process is still releasing its memory). Returns False on timeout."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if psutil.virtual_memory().available >= need_bytes:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(poll_s)

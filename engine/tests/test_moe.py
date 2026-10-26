@@ -192,3 +192,17 @@ def test_unused_prefetches_do_not_leak_slots(tmp_path: Path) -> None:
             assert mx.array_equal(
                 cache.layers[1].tensors["up_proj.weight"][int(mapping[e])], ref[int(e)]
             ).item()
+
+
+def test_prefetch_is_best_effort_and_counted(tmp_path: Path) -> None:
+    """A prefetch never waits or fails, and its accuracy is measured."""
+    _, _, cache, _ = _cache(tmp_path, slots=2)
+    cache.tick()
+    # Next layer gets more predictions than it has slots: must not raise.
+    cache.ensure(0, np.array([1, 2]), decode=True, prefetch=(1, np.array([5, 6, 7])))
+    assert cache.prefetch_issued == 2
+    cache.tick()
+    cache.ensure(1, np.array([5, 9]), decode=True)
+    assert cache.prefetch_used == 1
+    cache.publish(1, LAYERS)
+    assert cache.stats.snapshot()["drift"]["prefetch_accuracy"] == 0.5

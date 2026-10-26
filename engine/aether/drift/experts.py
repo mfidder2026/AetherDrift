@@ -127,6 +127,7 @@ class LayerSlots:
         self.count = np.zeros(slots, dtype=np.float64)
         self.last = np.zeros(slots, dtype=np.float64)
         self.pending: dict[int, Future[Any]] = {}  # slot → read in flight
+        self.prefetched: set[int] = set()  # experts loaded on a prediction, not yet used
 
     def score(self, now: float) -> np.ndarray:
         return self.count * np.power(0.5, (now - self.last) / HALF_LIFE_TOKENS)
@@ -159,6 +160,9 @@ class ExpertCache:
         self.stall_seconds = 0.0
         # Prefill buffer per tensor name: (host view, [n_experts, ...] MLX view); lazily sized.
         self._full: dict[str, tuple[np.ndarray, mx.array]] = {}
+        self.prefetch_enabled: Any = lambda: True  # set by the worker (live setting)
+        self.prefetch_issued = 0
+        self.prefetch_used = 0
 
     @property
     def resident_bytes(self) -> int:
@@ -218,6 +222,10 @@ class ExpertCache:
             fut = _all_of(reads)
             ls.pending[slot] = fut
             futures.append(fut)
+            ls.prefetched.discard(old)
+            if not required:
+                ls.prefetched.add(expert)
+                self.prefetch_issued += 1
         loaded = min(len(missing), len(free))
         if loaded:
             self.events.publish(
@@ -258,15 +266,19 @@ class ExpertCache:
         present = ls.slot_of[experts] >= 0
         if decode:
             self._hits.extend(present.tolist())
+            used = ls.prefetched.intersection(needed)
+            self.prefetch_used += len(used)
+            ls.prefetched -= used
         if len(needed) - int(present.sum()) > ls.slots:
             raise RuntimeError("more distinct experts than slots")
         self._start_loads(layer, needed, protect=set(needed))
-        if prefetch is not None:
+        if prefetch is not None and self.prefetch_enabled():
             next_layer, predicted = prefetch
             self._start_loads(
                 next_layer,
                 predicted.tolist()[: self.plan.experts_per_token],
                 protect=set(predicted.tolist()),
+                required=False,  # best effort: never wait, never fail
             )
         self._wait(layer, experts)
         if (ls.slot_of[experts] < 0).any():  # never compute with a wrong expert
@@ -341,6 +353,11 @@ class ExpertCache:
             stall_seconds=round(self.stall_seconds, 3),
             expert_slots=self.slots,
             experts_total=self.plan.n_experts,
+            prefetch_accuracy=(
+                round(self.prefetch_used / self.prefetch_issued, 3)
+                if self.prefetch_issued
+                else None
+            ),
         )
 
     def close(self) -> None:

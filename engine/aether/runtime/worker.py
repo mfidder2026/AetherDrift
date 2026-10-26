@@ -37,6 +37,7 @@ PREFETCH_DEPTH = 2
 # temporaries, nothing more, so memory stays within the budget.
 DRIFT_CACHE_BASE = 256 * 1024**2
 MIN_PROMPT_REUSE = 32  # tokens
+MEMORY_WAIT_S = 60.0  # e.g. a previous engine process still releasing ~100 GB
 _ids = itertools.count(1)
 
 
@@ -158,6 +159,13 @@ class Worker(threading.Thread):
             except Exception as exc:
                 if not isinstance(exc, EngineError):
                     log.exception("worker command %s failed", kind)
+                if kind == "load":  # every caller (API, CLI preload) sees load failures
+                    err = (
+                        exc.to_dict()
+                        if isinstance(exc, EngineError)
+                        else {"code": "internal", "message": str(exc), "hint": None}
+                    )
+                    self.events.publish("error", source="load", model=payload, **err)
                 fut.set_exception(exc)
             finally:
                 self._publish_memory()
@@ -233,17 +241,30 @@ class Worker(threading.Thread):
 
         # Never two models in memory at once.
         self._unload()
+        self._ensure_memory(
+            info.id, fit.required_min_bytes if fit.mode != "resident" else shape.total_bytes, budget
+        )
         self.stats.update("model", id=info.id, state="loading", mode=fit.mode, progress=0.0)
         self.events.publish("model_progress", model=info.id, progress=0.0, bytes=0)
         mx.reset_peak_memory()
         t0 = time.perf_counter()
-        if fit.mode == "drift-dense":
-            model, tokenizer, drift, backend, total = self._load_drift_dense(info, budget)
-        elif fit.mode == "drift-moe":
-            model, tokenizer, drift, backend, total = self._load_drift_moe(info, budget)
-        else:
-            model, tokenizer, total = self._load_resident(info)
-            drift = backend = None
+        try:
+            if fit.mode == "drift-dense":
+                model, tokenizer, drift, backend, total = self._load_drift_dense(info, budget)
+            elif fit.mode == "drift-moe":
+                model, tokenizer, drift, backend, total = self._load_drift_moe(info, budget)
+            else:
+                model, tokenizer, total = self._load_resident(info)
+                drift = backend = None
+        except Exception:
+            # The previous model is already unloaded: report the failure, never hang in
+            # "loading" (the app would show "Model laden…" forever).
+            self.stats.update("model", state="error", progress=None)
+            import gc
+
+            gc.collect()
+            mx.clear_cache()
+            raise
         elapsed = time.perf_counter() - t0
 
         self._prompt_cache = LRUPromptCache(
@@ -264,6 +285,23 @@ class Worker(threading.Thread):
             read_bytes_per_s=int(total / elapsed) if elapsed else None,
         )
         return self._model_status()
+
+    def _ensure_memory(self, model_id: str, need: int, budget: Budget) -> None:
+        """Refuse to allocate what macOS cannot give without swapping (never freeze)."""
+        from ..memory.guard import wait_for_memory
+
+        if wait_for_memory(need, timeout_s=MEMORY_WAIT_S):
+            return
+        import psutil
+
+        gb = 1024**3
+        free = psutil.virtual_memory().available
+        raise EngineError(
+            "not_enough_memory",
+            f"Er is nu {free / gb:.0f} GB vrij; dit model heeft {need / gb:.0f} GB nodig.",
+            hint="Sluit andere apps of verlaag het geheugen voor modelgewichten.",
+            status=409,
+        )
 
     def _progress(self, model_id: str, fraction: float, done_bytes: int) -> None:
         self.stats.update("model", progress=fraction)
@@ -297,8 +335,6 @@ class Worker(threading.Thread):
         return model, tokenizer, total
 
     def _load_drift_dense(self, info: LocalModel, budget: Budget) -> tuple[Any, ...]:
-        from mlx_lm.utils import load_tokenizer
-
         from ..drift.io_backend import PreadBackend
         from ..drift.model import build_drift_model
         from ..drift.residency import DenseResidency
@@ -334,7 +370,7 @@ class Worker(threading.Thread):
             mx.set_cache_limit(self._default_cache_limit)
             self._default_cache_limit = None
             raise
-        tokenizer = load_tokenizer(Path(info.path))
+        tokenizer = _tokenizer(info.path)
         self.events.publish(
             "drift_plan",
             model=info.id,
@@ -347,8 +383,6 @@ class Worker(threading.Thread):
         return model, tokenizer, drift, backend, drift.resident_bytes
 
     def _load_drift_moe(self, info: LocalModel, budget: Budget) -> tuple[Any, ...]:
-        from mlx_lm.utils import load_tokenizer
-
         from ..drift.experts import ExpertCache, choose_slots, plan_moe
         from ..drift.io_backend import PreadBackend
         from ..drift.model import build_moe_model
@@ -371,6 +405,7 @@ class Worker(threading.Thread):
         backend = PreadBackend()
         backend.on_read = self.stats.record_read
         cache = ExpertCache(plan, slots, backend, self.events, self.stats)
+        cache.prefetch_enabled = lambda: self.config.settings.prefetch_experts
         try:
             model = build_moe_model(info.path, cache, lambda f: self._progress(info.id, f, 0))
         except Exception:
@@ -379,7 +414,7 @@ class Worker(threading.Thread):
             mx.set_cache_limit(self._default_cache_limit)
             self._default_cache_limit = None
             raise
-        tokenizer = load_tokenizer(Path(info.path))
+        tokenizer = _tokenizer(info.path)
         resident = plan.resident_bytes + cache.resident_bytes + plan.prefill_bytes
         self.events.publish(
             "drift_plan",
@@ -469,6 +504,9 @@ class Worker(threading.Thread):
                 "generation_started", id=job.id, prompt_tokens=len(prompt), cached_tokens=cached
             )
             key = list(prompt)
+            # The template may open <think> itself (GLM); clients then still see a whole block.
+            if _opens_thinking(lm.tokenizer, prompt):
+                job.emit({"type": "token", "text": lm.tokenizer.think_start})
             text = ""
             emitted = 0
             n = 0
@@ -547,6 +585,29 @@ class Worker(threading.Thread):
             self._jobs.pop(job.id, None)
             self.stats.update("generation", active=False)
             self._publish_queue_depth()
+
+
+def _tokenizer(path: str) -> Any:
+    """Tokenizer with the model's own stop tokens, exactly as mlx_lm.load sets them up.
+
+    Models such as GLM list several end-of-turn tokens in config.json; without them a reply
+    runs on into an invented next user turn.
+    """
+    import json
+
+    from mlx_lm.utils import load_tokenizer
+
+    cfg = json.loads((Path(path) / "config.json").read_text())
+    eos = cfg.get("eos_token_id", cfg.get("text_config", {}).get("eos_token_id"))
+    return load_tokenizer(Path(path), eos_token_ids=eos)
+
+
+def _opens_thinking(tokenizer: Any, prompt: list[int]) -> bool:
+    """True when the chat template already opened a reasoning block in the prompt."""
+    if not getattr(tokenizer, "has_thinking", False):
+        return False
+    start = tokenizer.rfind_think_start(prompt)
+    return start >= 0 and tokenizer.rfind_think_end(prompt) < start
 
 
 def _usage(prompt: int, completion: int, cached: int) -> dict[str, int]:

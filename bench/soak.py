@@ -50,6 +50,7 @@ def main() -> None:
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--weights-budget")
     ap.add_argument("--max-tokens", type=int, default=256)
+    ap.add_argument("--os-reserve-gb", type=float)
     a = ap.parse_args()
 
     cmd = [
@@ -65,6 +66,8 @@ def main() -> None:
     ]
     if a.weights_budget:
         cmd += ["--weights-budget", a.weights_budget]
+    if a.os_reserve_gb:
+        cmd += ["--os-reserve-gb", str(a.os_reserve_gb)]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     assert proc.stdout
     url = f"http://127.0.0.1:{json.loads(proc.stdout.readline())['port']}"

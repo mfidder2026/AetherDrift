@@ -155,3 +155,51 @@ def test_context_too_long(engine_proc: RunningEngine) -> None:
         assert r.status_code == 400 and r.json()["error"]["code"] == "context_too_long"
     finally:
         httpx.put(f"{engine_proc.url}/aether/v1/config", json={"mode": "balans"})
+
+
+def test_failed_load_reports_error_and_keeps_engine_usable(tmp_path) -> None:
+    """Regression: a failing preload left model_state at "loading" forever."""
+    import os
+    import subprocess
+    import sys
+
+    bad = tmp_path / "broken-model"
+    bad.mkdir()
+    (bad / "config.json").write_text('{"model_type": "does_not_exist", "quantization": {}}')
+    from conftest import write_safetensors
+
+    write_safetensors(bad / "model.safetensors", {"model.layers.0.w.weight": ("F16", [4, 4])})
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "aether",
+            "--port",
+            "0",
+            "--data-dir",
+            str(tmp_path / "d"),
+            "--model",
+            str(bad),
+            "--parent-pid",
+            str(os.getpid()),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        assert proc.stdout
+        url = f"http://127.0.0.1:{json.loads(proc.stdout.readline())['port']}"
+        events = []
+        with httpx.stream("GET", f"{url}/aether/v1/events/stream?since=0", timeout=30) as r:
+            for line in r.iter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+                    if events[-1]["type"] == "error":
+                        break
+        assert events[-1]["source"] == "load" and events[-1]["message"]
+        # Never stuck in "loading": either no model ("none") or a visible error.
+        assert httpx.get(f"{url}/health").json()["model_state"] in ("none", "error")
+    finally:
+        proc.terminate()
+        proc.wait(timeout=20)

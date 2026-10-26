@@ -40,3 +40,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+# Pinned to a main-branch commit: GLM 5.3's shared sparse-attention indexer (indexer_types)
+# is not in a PyPI release yet (0.32.2). Switch back to PyPI once a release includes it.
+mlx-lm ={ git = "https://github.com/ml-explore/mlx-lm", rev = "4cfc6478473b0668ede3eb0cc93f2a9181a15052" }

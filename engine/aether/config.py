@@ -43,6 +43,7 @@ class Settings(BaseModel):
     weights_budget_gb: float | None = Field(None, gt=0, description="Override; None = automatic")
     prefill_step_size: int = Field(2048, ge=128, le=16384)
     prompt_cache_entries: int = Field(3, ge=0, le=16)
+    prefetch_experts: bool = True  # Drift-MoE: speculative prefetch of the next layer's experts
 
 
 @dataclass

@@ -26,12 +26,28 @@ Bij MoE-modellen zoals GLM 5.3 (418 GB, 256 experts per laag, 8 per token) is vr
 
 **4. Uitgelijnd lezen met staging.** Expert-slices beginnen op scheve offsets. Ze worden 4 KB-uitgelijnd gelezen in een thread-lokale staging-buffer en daarna gekopieerd (ADR-004), zodat de page cache buiten spel blijft (6,7 GB/s, ook bij herhaling).
 
+**Resultaat op GLM 5.3 (4-bit, 418 GB) op 128 GB, page cache geleegd:**
+- 56 van de 256 experts per laag in RAM; ~98 GB MLX-geheugen.
+- Decode: **1,15–1,29 tok/s**. Eerste token: **17–28 s** (prefill van een korte vraag leest ~100–150 GB aan experts).
+- Echte cache-hitrate 62–64 %. Per token ~4,7 GB aan ontbrekende experts; de SSD leest op volle snelheid (~6,2 GB/s). Dit is de natuurkundige grens bij deze cachegrootte.
+- Prefetch heeft een trefzekerheid van 68–70 %, maar levert bij GLM geen snelheidswinst op: de SSD is al verzadigd. Het staat standaard aan (+35 % bij Qwen3) en is te schakelen met de instelling `prefetch_experts`.
+
 ## Correctheid
 - Uitvoer bit-identiek aan mlx-lm bij greedy decoding (5/5 prompts, Qwen3-30B met 16 % van de experts in RAM).
 - Ontbreekt een benodigde expert na het laden, dan volgt een harde fout in plaats van stil verkeerd rekenen. Dit vangnet is toegevoegd na een gevonden bug: voorspelde maar ongebruikte experts hielden hun slot voor altijd bezet.
 
 ## Neveneffect: prompt-cache
 Tijdens dit onderzoek bleek dat ook de Resident-modus afweek van mlx-lm zodra de prompt-cache een korte prefix (3 tokens) hergebruikte. Een prefill in twee stukken rondt anders af. Hergebruik gebeurt nu pas vanaf 32 gedeelde tokens: korte prompts zijn reproduceerbaar, lange gesprekken houden de snelheidswinst.
+
+## Ondersteuning van GLM 5.3
+GLM 5.3 gebruikt een sparse-attention-indexer die maar in elke 4e laag eigen gewichten heeft ("shared"). mlx-lm 0.32.2 ondersteunt dat niet. De engine is daarom gepind op mlx-lm-commit `4cfc647` van `main` (`[tool.uv.sources]` in `engine/pyproject.toml`). Terug naar PyPI zodra een release dit bevat.
+
+## Gevonden en opgelost tijdens de GLM-test
+- De Drift-laadpaden lieten de stop-tokens uit `config.json` weg, waardoor GLM na zijn antwoord doorpraatte met verzonnen `<|user|>`-beurten. Nu worden ze geladen zoals `mlx_lm.load` dat doet.
+- GLM opent `<think>` al in de prompt. De engine stuurt die tag nu als eerste token mee, zodat clients een compleet denkblok zien.
+- Prefetch draaide door een niet-toegepaste wijziging als verplichte load (kon wachten, of in theorie falen). Hersteld; met test en meting van de trefzekerheid.
+- Een mislukte laadpoging bij het opstarten liet de status op "loading" staan. Nu: status "error" plus een error-event.
+- Een nieuwe engine kon ~100 GB reserveren terwijl een vorig engine-proces dat geheugen nog vrijgaf (swappiek van 21 GB tijdens een handmatige herstart). De engine wacht nu tot 60 s tot er genoeg vrij is, en geeft anders `not_enough_memory`.
 
 ## Nog open
 - Expert-slots verkleinen bij geheugendruk wordt niet ondersteund (vaste tensors). Bij MoE stopt de bewaker bij "kritiek" alleen de generatie.
