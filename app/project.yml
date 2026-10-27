@@ -5,6 +5,7 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  developmentLanguage: nl
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -15,6 +16,8 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
@@ -51,6 +54,10 @@ targets:
       - name: Bundle engine and uv
         script: |
           "${SRCROOT}/scripts/bundle-engine.sh"
+        basedOnDependencyAnalysis: false
+      - name: Bundle Python runtime (Release)
+        script: |
+          "${SRCROOT}/scripts/bundle-runtime.sh"
         basedOnDependencyAnalysis: false
   AetherDriftTests:
     type: bundle.unit-test

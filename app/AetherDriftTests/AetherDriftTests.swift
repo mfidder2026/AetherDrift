@@ -192,3 +192,21 @@ final class ReasoningSplitTests: XCTestCase {
         XCTAssertEqual(done.answer, "**Antwoord**")
     }
 }
+
+final class EngineSettingsEncodingTests: XCTestCase {
+    func testAutomaticLimitsAreSentAsNull() throws {
+        let s = EngineSettings(mode: "balans", share: false, allowClientModelSwitch: false, osReserveGb: nil,
+                               engineOverheadGb: 2, weightsBudgetGb: nil, prefillStepSize: 2048,
+                               promptCacheEntries: 3, requiresReload: nil)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: API.encoder.encode(s)) as? [String: Any])
+        XCTAssertTrue(json["os_reserve_gb"] is NSNull)
+        XCTAssertTrue(json["weights_budget_gb"] is NSNull)
+        XCTAssertNil(json["requires_reload"])
+    }
+
+    func testNetworkAddressPutsKeyInFragment() {
+        let a = NetworkAddress(hostName: "studio.local", ip: "192.168.1.20", port: 8080)
+        XCTAssertEqual(a.baseURL, "http://studio.local:8080/v1")
+        XCTAssertEqual(a.webchatURL(key: "abc-_1"), "http://192.168.1.20:8080/#key=abc-_1")
+    }
+}

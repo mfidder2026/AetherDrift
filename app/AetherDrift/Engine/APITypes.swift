@@ -43,6 +43,7 @@ struct SystemInfo: Decodable, Sendable, Equatable {
     let metalWorkingSetBytes: Int64
     let macos: String
     let ssdReadBytesPerS: Double?
+    let osReserveAutoGb: Double?
 }
 
 struct Fit: Decodable, Sendable, Hashable {
@@ -172,12 +173,27 @@ struct EngineSettings: Codable, Sendable, Equatable {
     var mode: String
     var share: Bool
     var allowClientModelSwitch: Bool
-    var osReserveGb: Double
+    var osReserveGb: Double?  // nil = automatic (SystemInfo.osReserveAutoGb)
     var engineOverheadGb: Double
     var weightsBudgetGb: Double?
     var prefillStepSize: Int
     var promptCacheEntries: Int
     var requiresReload: Bool?
+
+    /// nil means "automatic" for the two optional limits, so it is sent as an explicit null;
+    /// a missing key would leave the engine's previous value in place.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(mode, forKey: .mode)
+        try c.encode(share, forKey: .share)
+        try c.encode(allowClientModelSwitch, forKey: .allowClientModelSwitch)
+        try c.encode(osReserveGb, forKey: .osReserveGb)
+        try c.encode(engineOverheadGb, forKey: .engineOverheadGb)
+        try c.encode(weightsBudgetGb, forKey: .weightsBudgetGb)
+        try c.encode(prefillStepSize, forKey: .prefillStepSize)
+        try c.encode(promptCacheEntries, forKey: .promptCacheEntries)
+        try c.encodeIfPresent(requiresReload, forKey: .requiresReload)
+    }
 }
 
 // MARK: - Chat
@@ -237,4 +253,18 @@ enum ChatEvent: Sendable, Equatable {
     case token(String)
     case finished(reason: String, timings: Timings?)
     case usage(Usage)
+}
+
+// MARK: - Sharing
+
+struct NetworkClient: Decodable, Sendable, Identifiable, Equatable {
+    let ip: String
+    let requests: Int
+    let tokens: Int?
+    let lastRequest: Double?
+    var id: String { ip }
+}
+
+struct NetworkClients: Decodable, Sendable {
+    let clients: [NetworkClient]
 }

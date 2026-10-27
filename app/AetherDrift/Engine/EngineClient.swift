@@ -51,6 +51,15 @@ final class EngineClient: Sendable {
         try await sendIgnoringBody(request("/aether/v1/generations/\(id)/cancel", method: "POST"))
     }
 
+    func setAPIKey(_ key: String) async throws {
+        try await sendIgnoringBody(request("/aether/v1/api-key", method: "PUT", json: ["key": key]))
+    }
+
+    func clients() async throws -> [NetworkClient] {
+        let r: NetworkClients = try await send(request("/aether/v1/clients"))
+        return r.clients
+    }
+
     func settings() async throws -> EngineSettings { try await send(request("/aether/v1/config")) }
 
     func replaceSettings(_ settings: EngineSettings) async throws -> EngineSettings {

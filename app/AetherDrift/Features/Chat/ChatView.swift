@@ -152,9 +152,9 @@ struct MessageView: View {
     private var waitingText: String {
         switch state.supervisor.status {
         case .ready:
-            state.modelState?.state == "loading" ? "Wacht op model…" : "Bezig…"
+            state.modelState?.state == "loading" ? String(localized: "Wacht op model…") : String(localized: "Bezig…")
         default:
-            "Wacht op de engine…"
+            String(localized: "Wacht op de engine…")
         }
     }
 
@@ -186,10 +186,10 @@ struct MessageView: View {
     private func footerText(_ m: MessageMeta) -> String {
         var parts: [String] = []
         if let tps = m.decodeTps { parts.append(Format.tps(tps)) }
-        if let n = m.completionTokens { parts.append("\(n) tokens") }
+        if let n = m.completionTokens { parts.append(String(localized: "\(n) tokens")) }
         if let mode = m.mode { parts.append(Format.modeName(mode)) }
-        if m.finishReason == "cancelled" { parts.append("gestopt") }
-        if m.finishReason == "memory" { parts.append("ingekort (geheugen)") }
+        if m.finishReason == "cancelled" { parts.append(String(localized: "gestopt")) }
+        if m.finishReason == "memory" { parts.append(String(localized: "ingekort (geheugen)")) }
         return parts.joined(separator: " · ")
     }
 }

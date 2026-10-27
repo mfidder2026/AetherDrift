@@ -69,6 +69,15 @@ struct MainView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    state.showConnect = true
+                } label: {
+                    Label("Verbind", systemImage: state.isSharing
+                          ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                }
+                .help(state.isSharing ? "Delen staat aan — verbind een apparaat (⌘⇧C)" : "Verbind een apparaat (⌘⇧C)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     state.showInspector.toggle()
                 } label: {
                     Label("Live", systemImage: "waveform.path.ecg")
@@ -78,6 +87,9 @@ struct MainView: View {
         }
         .sheet(isPresented: $state.showModelPalette) {
             ModelPalette()
+        }
+        .sheet(isPresented: $state.showConnect) {
+            ConnectSheet()
         }
     }
 }
@@ -98,12 +110,12 @@ struct EngineStatusBanner: View {
             banner("De engine wordt herstart (poging \(attempt)). Je gesprek is bewaard.",
                    icon: "arrow.clockwise", tint: .orange, spinning: true)
         case .failed(let message):
-            banner("De engine kon niet starten. Nieuwe poging volgt automatisch.\n\(message.prefix(300))",
+            banner("De engine kon niet starten. Nieuwe poging volgt automatisch.\n\(String(message.prefix(300)))",
                    icon: "exclamationmark.triangle", tint: .red, spinning: false)
         }
     }
 
-    private func banner(_ text: String, icon: String, tint: Color, spinning: Bool) -> some View {
+    private func banner(_ text: LocalizedStringKey, icon: String, tint: Color, spinning: Bool) -> some View {
         HStack(spacing: 8) {
             if spinning { ProgressView().controlSize(.small) } else { Image(systemName: icon) }
             Text(text).font(.callout).lineLimit(3)

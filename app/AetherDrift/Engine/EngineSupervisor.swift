@@ -77,7 +77,8 @@ final class EngineSupervisor {
 
     /// Kill and restart (used by tests and the "Herstart engine" action).
     func restart() {
-        process?.terminate()
+        guard let process else { return }
+        Task { await Self.shutDown(process) }
     }
 
     // MARK: - Loop
@@ -140,7 +141,7 @@ final class EngineSupervisor {
             !p.isRunning
         }
         guard let port else {
-            p.terminate()
+            await Self.shutDown(p)
             throw RuntimeError("De engine startte niet.\n\(tail.text.suffix(1500))")
         }
         becomeReady(port: port, external: false)
@@ -175,12 +176,27 @@ final class EngineSupervisor {
                 misses += 1
                 if misses >= Self.allowedMisses {
                     log.error("engine missed \(misses) health checks")
-                    process?.terminate()
+                    if let process { await Self.shutDown(process) }
                     break
                 }
             }
         }
         self.client = nil
+    }
+
+    /// SIGTERM, then SIGKILL if the engine has not exited after `grace`. A new engine must
+    /// never start while the old one still holds its memory (up to ~100 GB).
+    static func shutDown(_ process: Process, grace: Duration = .seconds(10)) async {
+        guard process.isRunning else { return }
+        process.terminate()
+        let deadline = ContinuousClock.now + grace
+        while process.isRunning && ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if process.isRunning {
+            kill(process.processIdentifier, SIGKILL)
+            while process.isRunning { try? await Task.sleep(for: .milliseconds(50)) }
+        }
     }
 }
 

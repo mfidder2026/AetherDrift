@@ -13,7 +13,7 @@ struct LiveInspector: View {
                     memory(s)
                     Divider()
                     StatRow(label: "Tokens/s", value: Format.number(s.generation.decodeTps, digits: 1),
-                            accessibility: "Tokens per seconde")
+                            accessibility: String(localized: "Tokens per seconde"))
                     Sparkline(values: live.tpsHistory).frame(height: 28)
                     StatRow(label: "Prefill", value: s.generation.prefillTps.map { Format.number($0, digits: 0) + " tok/s" } ?? "—")
                     StatRow(label: "Eerste token", value: s.generation.ttftMs.map { Format.number($0, digits: 0) + " ms" } ?? "—")
@@ -58,7 +58,7 @@ struct LiveInspector: View {
         let total = s.memory.systemTotalBytes
         VStack(alignment: .leading, spacing: 4) {
             StatRow(label: "RAM", value: "\(Format.gb(used)) / \(Format.gb(total))",
-                    accessibility: "RAM-gebruik \(used / 1_073_741_824) van \(total / 1_073_741_824) gigabyte")
+                    accessibility: String(localized: "RAM-gebruik \(used / 1_073_741_824) van \(total / 1_073_741_824) gigabyte"))
             ProgressView(value: Double(used), total: Double(max(total, 1)))
                 .tint(s.memory.pressure == "normal" ? .accentColor : .orange)
             Text("Model \(Format.gb(s.memory.weightsBytes, digits: 1)) · KV \(Format.gb(s.memory.kvBytes, digits: 1))")
@@ -78,15 +78,15 @@ struct LiveInspector: View {
 
     private func pressure(_ p: String) -> String {
         switch p {
-        case "warning": "Krap"
-        case "critical": "Kritiek"
-        default: "Normaal"
+        case "warning": String(localized: "Krap")
+        case "critical": String(localized: "Kritiek")
+        default: String(localized: "Normaal")
         }
     }
 }
 
 private struct StatRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
     var accessibility: String?
 
@@ -98,7 +98,7 @@ private struct StatRow: View {
         }
         .font(.callout)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibility ?? "\(label): \(value)")
+        .accessibilityLabel(accessibility.map { Text($0) } ?? Text(label) + Text(verbatim: ": \(value)"))
     }
 }
 

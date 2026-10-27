@@ -2,6 +2,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @State private var autoReserve = true
+    @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginError: String?
     @State private var osReserve = 16.0
     @State private var capWeights = false
     @State private var weightsCap = 8.0
@@ -22,15 +25,20 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Geavanceerd") {
+                Toggle("Reserve voor macOS automatisch", isOn: $autoReserve)
+                    .onChange(of: autoReserve) { _, on in
+                        Task { await state.updateOSReserve(on ? nil : osReserve) }
+                    }
                 HStack {
-                    Slider(value: $osReserve, in: 8...48, step: 2) {
+                    Slider(value: $osReserve, in: 4...48, step: 1) {
                         Text("Reserve voor macOS")
                     } onEditingChanged: { editing in
                         if !editing { Task { await state.updateOSReserve(osReserve) } }
                     }
+                    .disabled(autoReserve)
                     Text("\(Int(osReserve)) GB").monospacedDigit().frame(width: 48, alignment: .trailing)
                 }
-                Text("Geheugen dat altijd vrij blijft voor macOS en je andere apps. Geldt na opnieuw laden van het model.")
+                Text("Geheugen dat altijd vrij blijft voor macOS en je andere apps. Automatisch is een kwart van het RAM, tussen 4 en 16 GB. Geldt na opnieuw laden van het model.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Begrens geheugen voor modelgewichten", isOn: $capWeights)
                     .onChange(of: capWeights) { _, on in
@@ -46,6 +54,28 @@ struct SettingsView: View {
                 Text("Past een model niet binnen deze grens, dan draait het via Drift: een deel blijft in RAM, de rest stroomt van de SSD.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Algemeen") {
+                Toggle("Snelchat met ⌥Spatie", isOn: Binding(
+                    get: { state.quickChatEnabled }, set: { state.quickChatEnabled = $0 }
+                ))
+                Toggle("Blijf actief in de menubalk na sluiten van het venster", isOn: Binding(
+                    get: { state.keepRunning }, set: { state.keepRunningSetting = $0 }
+                ))
+                Text("Standaard aan zolang delen aan staat, zodat andere apparaten het model kunnen blijven gebruiken.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Start bij inloggen", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, on in
+                        do {
+                            try LoginItem.set(on)
+                        } catch {
+                            loginError = error.localizedDescription
+                            launchAtLogin = LoginItem.isEnabled
+                        }
+                    }
+                if let loginError {
+                    Text(loginError).font(.caption).foregroundStyle(.red)
+                }
+            }
             Section("Engine") {
                 LabeledContent("Status", value: statusText)
                 Button("Herstart engine") { state.supervisor.restart() }
@@ -55,7 +85,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .onAppear {
-            osReserve = state.settings?.osReserveGb ?? 16
+            if let gb = state.settings?.osReserveGb {
+                autoReserve = false
+                osReserve = gb
+            } else {
+                osReserve = state.system?.osReserveAutoGb ?? 16
+            }
             if let cap = state.settings?.weightsBudgetGb {
                 capWeights = true
                 weightsCap = cap
@@ -65,12 +100,13 @@ struct SettingsView: View {
 
     private var statusText: String {
         switch state.supervisor.status {
-        case .ready(let port, let external): "Actief op poort \(port)\(external ? " (extern)" : "")"
-        case .installing: "Installeren…"
-        case .starting: "Starten…"
-        case .restarting(let n): "Herstarten (poging \(n))"
-        case .failed: "Fout"
-        case .idle: "Uit"
+        case .ready(let port, let external):
+            external ? String(localized: "Actief op poort \(port) (extern)") : String(localized: "Actief op poort \(port)")
+        case .installing: String(localized: "Installeren…")
+        case .starting: String(localized: "Starten…")
+        case .restarting(let n): String(localized: "Herstarten (poging \(n))")
+        case .failed: String(localized: "Fout")
+        case .idle: String(localized: "Uit")
         }
     }
 }

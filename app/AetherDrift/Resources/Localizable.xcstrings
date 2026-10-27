@@ -1,0 +1,1851 @@
+{
+  "sourceLanguage": "nl",
+  "strings": {
+    "": {
+      "shouldTranslate": false
+    },
+    "%@ is gedownload en wordt geladen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ has downloaded and is being loaded."
+          }
+        }
+      }
+    },
+    "%@ van %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ of %2$@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ van %2$@"
+          }
+        }
+      }
+    },
+    "%lld GB": {},
+    "%lld tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld tokens"
+          }
+        }
+      }
+    },
+    "%lld van %lld experts per laag in RAM; de rest komt van de SSD wanneer nodig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld experts per layer in RAM; the rest comes from the SSD when needed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld van %2$lld experts per laag in RAM; de rest komt van de SSD wanneer nodig"
+          }
+        }
+      }
+    },
+    "%lld van %lld lagen vast in RAM, de rest stroomt van de SSD": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld layers pinned in RAM, the rest streams from the SSD"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld van %2$lld lagen vast in RAM, de rest stroomt van de SSD"
+          }
+        }
+      }
+    },
+    "%lld verzoeken · %lld tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld requests · %2$lld tokens"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld verzoeken · %2$lld tokens"
+          }
+        }
+      }
+    },
+    "%lld.": {
+      "shouldTranslate": false
+    },
+    "<sleutel>": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<key>"
+          }
+        }
+      }
+    },
+    "API-sleutel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API key"
+          }
+        }
+      }
+    },
+    "Aanbevolen voor deze Mac. Je kunt later altijd wisselen (⌘K).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended for this Mac. You can always switch later (⌘K)."
+          }
+        }
+      }
+    },
+    "Actief op poort %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running on port %lld"
+          }
+        }
+      }
+    },
+    "Actief op poort %lld (extern)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running on port %lld (external)"
+          }
+        }
+      }
+    },
+    "Adres": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Address"
+          }
+        }
+      }
+    },
+    "AetherDrift": {},
+    "AetherDrift genereert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AetherDrift is generating"
+          }
+        }
+      }
+    },
+    "Algemeen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        }
+      }
+    },
+    "Ander model kiezen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another model"
+          }
+        }
+      }
+    },
+    "Andere apps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other apps"
+          }
+        }
+      }
+    },
+    "Annuleer download": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel download"
+          }
+        }
+      }
+    },
+    "Apparaten die de huidige sleutel gebruiken, moeten opnieuw verbinden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices using the current key will have to reconnect."
+          }
+        }
+      }
+    },
+    "Balans": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balanced"
+          }
+        }
+      }
+    },
+    "Base URL": {},
+    "Begrens geheugen voor modelgewichten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limit memory for model weights"
+          }
+        }
+      }
+    },
+    "Bericht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message"
+          }
+        }
+      }
+    },
+    "Bezig…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working…"
+          }
+        }
+      }
+    },
+    "Bijna klaar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Almost done"
+          }
+        }
+      }
+    },
+    "Blijf actief in de menubalk na sluiten van het venster": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep running in the menu bar after closing the window"
+          }
+        }
+      }
+    },
+    "Cache-hit": {},
+    "Chip": {},
+    "Context": {},
+    "De camera opent de webchat en verbindt meteen. Je telefoon moet op hetzelfde wifi-netwerk zitten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera opens the web chat and connects right away. Your phone must be on the same Wi-Fi network."
+          }
+        }
+      }
+    },
+    "De engine is even niet bereikbaar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine is briefly unreachable."
+          }
+        }
+      }
+    },
+    "De engine kon niet starten. Nieuwe poging volgt automatisch.\n%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine could not start. It will try again automatically.\n%@"
+          }
+        }
+      }
+    },
+    "De engine wordt herstart (poging %lld). Je gesprek is bewaard.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restarting the engine (attempt %lld). Your conversation is saved."
+          }
+        }
+      }
+    },
+    "De huidige sleutel blijft geldig.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current key stays valid."
+          }
+        }
+      }
+    },
+    "De nieuwe sleutel kon niet in de sleutelhanger bewaard worden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new key could not be saved in the keychain."
+          }
+        }
+      }
+    },
+    "Delen op netwerk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share on network"
+          }
+        }
+      }
+    },
+    "Delen staat aan — verbind een apparaat (⌘⇧C)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing is on — connect a device (⌘⇧C)"
+          }
+        }
+      }
+    },
+    "Delen: aan": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing: on"
+          }
+        }
+      }
+    },
+    "Delen: uit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing: off"
+          }
+        }
+      }
+    },
+    "Denkproces": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning"
+          }
+        }
+      }
+    },
+    "Denkt na…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking…"
+          }
+        }
+      }
+    },
+    "Dit model past niet op deze Mac, ook niet via Drift.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This model does not fit on this Mac, not even via Drift."
+          }
+        }
+      }
+    },
+    "Download": {},
+    "Download onderbroken.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download interrupted."
+          }
+        }
+      }
+    },
+    "Downloaden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading"
+          }
+        }
+      }
+    },
+    "Downloaden en laden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and load"
+          }
+        }
+      }
+    },
+    "Drift": {},
+    "Drift-kaart": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drift map"
+          }
+        }
+      }
+    },
+    "Eerste token": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First token"
+          }
+        }
+      }
+    },
+    "Engine": {},
+    "Engine installeren (eenmalig) — %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing engine (one time) — %@"
+          }
+        }
+      }
+    },
+    "Engine start…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine starting…"
+          }
+        }
+      }
+    },
+    "Er ging iets mis.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something went wrong."
+          }
+        }
+      }
+    },
+    "Er is nog geen model geladen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No model is loaded yet."
+          }
+        }
+      }
+    },
+    "Fout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        }
+      }
+    },
+    "Fout: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error: %@"
+          }
+        }
+      }
+    },
+    "Geavanceerd": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced"
+          }
+        }
+      }
+    },
+    "Geen model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No model"
+          }
+        }
+      }
+    },
+    "Geen model geladen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No model loaded"
+          }
+        }
+      }
+    },
+    "Geen netwerkverbinding gevonden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No network connection found."
+          }
+        }
+      }
+    },
+    "Geheugen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        }
+      }
+    },
+    "Geheugen dat altijd vrij blijft voor macOS en je andere apps. Automatisch is een kwart van het RAM, tussen 4 en 16 GB. Geldt na opnieuw laden van het model.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory that always stays free for macOS and your other apps. Automatic is a quarter of RAM, between 4 and 16 GB. Applies after the model is reloaded."
+          }
+        }
+      }
+    },
+    "Geheugen krap.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory is tight."
+          }
+        }
+      }
+    },
+    "Geheugendruk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure"
+          }
+        }
+      }
+    },
+    "Gekopieerd": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
+          }
+        }
+      }
+    },
+    "Geladen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loaded"
+          }
+        }
+      }
+    },
+    "Gereed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "Grote AI-modellen, gewoon op je eigen Mac. We controleren even je Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large AI models, right on your own Mac. Let's check your Mac."
+          }
+        }
+      }
+    },
+    "Herstart engine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart engine"
+          }
+        }
+      }
+    },
+    "Herstarten (poging %lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restarting (attempt %lld)"
+          }
+        }
+      }
+    },
+    "Hervat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume"
+          }
+        }
+      }
+    },
+    "Het model kon niet geladen worden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model could not be loaded."
+          }
+        }
+      }
+    },
+    "Hij wordt automatisch herstart. Je gesprek is bewaard.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It restarts automatically. Your conversation is saved."
+          }
+        }
+      }
+    },
+    "In RAM": {},
+    "Installeren (eenmalig, ± 1 minuut)…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing (one time, about 1 minute)…"
+          }
+        }
+      }
+    },
+    "Installeren…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing…"
+          }
+        }
+      }
+    },
+    "Je Mac had het geheugen nodig, dus het antwoord is ingekort.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac needed the memory, so the answer was cut short."
+          }
+        }
+      }
+    },
+    "Je Mac had het geheugen nodig.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac needed the memory."
+          }
+        }
+      }
+    },
+    "Je kunt zo al chatten met %@. %@ downloadt intussen verder en wordt automatisch geladen zodra het binnen is.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can chat with %1$@ in a moment. %2$@ keeps downloading and is loaded automatically once it is in."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Je kunt zo al chatten met %1$@. %2$@ downloadt intussen verder en wordt automatisch geladen zodra het binnen is."
+          }
+        }
+      }
+    },
+    "Jij": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You"
+          }
+        }
+      }
+    },
+    "Kies een kleiner model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a smaller model"
+          }
+        }
+      }
+    },
+    "Kies een model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a model"
+          }
+        }
+      }
+    },
+    "Kies model (⌘K)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose model (⌘K)"
+          }
+        }
+      }
+    },
+    "Kies model…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose model…"
+          }
+        }
+      }
+    },
+    "Klaar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      }
+    },
+    "Kopieer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "Kopieer antwoord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy answer"
+          }
+        }
+      }
+    },
+    "Kopieer code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy code"
+          }
+        }
+      }
+    },
+    "Kopieer voorbeeld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy example"
+          }
+        }
+      }
+    },
+    "Krap": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tight"
+          }
+        }
+      }
+    },
+    "Kritiek": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        }
+      }
+    },
+    "Laag": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layer"
+          }
+        }
+      }
+    },
+    "Laag %lld van %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layer %1$lld of %2$lld"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Laag %1$lld van %2$lld"
+          }
+        }
+      }
+    },
+    "Laden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load"
+          }
+        }
+      }
+    },
+    "Lange context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long context"
+          }
+        }
+      }
+    },
+    "Live": {},
+    "Live-paneel (⌘I)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live panel (⌘I)"
+          }
+        }
+      }
+    },
+    "Log": {},
+    "Maak nieuwe sleutel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create new key"
+          }
+        }
+      }
+    },
+    "Map kiezen…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose folder…"
+          }
+        }
+      }
+    },
+    "Maximaal %lld GB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At most %lld GB"
+          }
+        }
+      }
+    },
+    "Model": {},
+    "Model %@ · KV %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model %1$@ · KV %2$@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Model %1$@ · KV %2$@"
+          }
+        }
+      }
+    },
+    "Model downloaden…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading model…"
+          }
+        }
+      }
+    },
+    "Model laden…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading model…"
+          }
+        }
+      }
+    },
+    "Model: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model: %@"
+          }
+        }
+      }
+    },
+    "Modus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode"
+          }
+        }
+      }
+    },
+    "Modus Snel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast mode"
+          }
+        }
+      }
+    },
+    "Nieuw gesprek": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New conversation"
+          }
+        }
+      }
+    },
+    "Nieuw gesprek (⌘N)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New conversation (⌘N)"
+          }
+        }
+      }
+    },
+    "Nieuwe sleutel maken?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a new key?"
+          }
+        }
+      }
+    },
+    "Nieuw…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New…"
+          }
+        }
+      }
+    },
+    "Nog geen gesprekken": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No conversations yet"
+          }
+        }
+      }
+    },
+    "Nog geen modellen. Download er hieronder één.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No models yet. Download one below."
+          }
+        }
+      }
+    },
+    "Nog geen verbindingen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No connections yet."
+          }
+        }
+      }
+    },
+    "Normaal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        }
+      }
+    },
+    "Ollama-clients gebruiken %@ met dezelfde sleutel.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ollama clients use %@ with the same key."
+          }
+        }
+      }
+    },
+    "Op deze Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this Mac"
+          }
+        }
+      }
+    },
+    "Open AetherDrift": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open AetherDrift"
+          }
+        }
+      }
+    },
+    "Open in AetherDrift": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in AetherDrift"
+          }
+        }
+      }
+    },
+    "Open logbestand": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open log file"
+          }
+        }
+      }
+    },
+    "Opnieuw genereren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regenerate"
+          }
+        }
+      }
+    },
+    "Opnieuw proberen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "Past een model niet binnen deze grens, dan draait het via Drift: een deel blijft in RAM, de rest stroomt van de SSD.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If a model does not fit within this limit, it runs via Drift: part stays in RAM, the rest streams from the SSD."
+          }
+        }
+      }
+    },
+    "Past niet op deze Mac, ook niet via Drift.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Does not fit on this Mac, not even via Drift."
+          }
+        }
+      }
+    },
+    "Pauzeer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause"
+          }
+        }
+      }
+    },
+    "Prefill": {},
+    "Probeer het opnieuw zodra je weer online bent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again once you are back online."
+          }
+        }
+      }
+    },
+    "Python": {
+      "shouldTranslate": false
+    },
+    "QR-code naar de webchat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR code to the web chat"
+          }
+        }
+      }
+    },
+    "RAM": {},
+    "RAM-gebruik %lld van %lld gigabyte": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM use %1$lld of %2$lld gigabytes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "RAM-gebruik %1$lld van %2$lld gigabyte"
+          }
+        }
+      }
+    },
+    "Recente apparaten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent devices"
+          }
+        }
+      }
+    },
+    "Reserve voor macOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserve for macOS"
+          }
+        }
+      }
+    },
+    "Reserve voor macOS automatisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserve for macOS automatically"
+          }
+        }
+      }
+    },
+    "SSD-lezen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSD read"
+          }
+        }
+      }
+    },
+    "SSD-snelheid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSD speed"
+          }
+        }
+      }
+    },
+    "Scan met je telefoon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan with your phone"
+          }
+        }
+      }
+    },
+    "Sluit melding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss notification"
+          }
+        }
+      }
+    },
+    "Sluiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "Snel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast"
+          }
+        }
+      }
+    },
+    "Snel geeft het model zoveel mogelijk geheugen. Lange context ruimt plaats in voor lange gesprekken en documenten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast gives the model as much memory as possible. Long context makes room for long conversations and documents."
+          }
+        }
+      }
+    },
+    "Snel starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick start"
+          }
+        }
+      }
+    },
+    "Snel: hoogste snelheid · Balans: normaal · Lange context: lange documenten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast: highest speed · Balanced: normal · Long context: long documents"
+          }
+        }
+      }
+    },
+    "Snelchat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick chat"
+          }
+        }
+      }
+    },
+    "Snelchat met ⌥Spatie": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick chat with ⌥Space"
+          }
+        }
+      }
+    },
+    "Standaard aan zolang delen aan staat, zodat andere apparaten het model kunnen blijven gebruiken.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On by default while sharing is on, so other devices can keep using the model."
+          }
+        }
+      }
+    },
+    "Stap %lld van 3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %lld of 3"
+          }
+        }
+      }
+    },
+    "Start bij inloggen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start at login"
+          }
+        }
+      }
+    },
+    "Starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        }
+      }
+    },
+    "Starten…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting…"
+          }
+        }
+      }
+    },
+    "Status": {},
+    "Stel een vraag…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask anything…"
+          }
+        }
+      }
+    },
+    "Stop": {},
+    "Stop (⌘.)": {},
+    "Stop AetherDrift": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit AetherDrift"
+          }
+        }
+      }
+    },
+    "Stop generatie": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop generating"
+          }
+        }
+      }
+    },
+    "Te groot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too large"
+          }
+        }
+      }
+    },
+    "Terug": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "Tokens per seconde": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens per second"
+          }
+        }
+      }
+    },
+    "Tokens/s": {},
+    "Toon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      }
+    },
+    "Toon Live-paneel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Live panel"
+          }
+        }
+      }
+    },
+    "Toon log": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show log"
+          }
+        }
+      }
+    },
+    "Toon log (⌘L)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show log (⌘L)"
+          }
+        }
+      }
+    },
+    "Toon onboarding opnieuw": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show onboarding again"
+          }
+        }
+      }
+    },
+    "Uit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        }
+      }
+    },
+    "Verberg": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
+    "Verberg Live-paneel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Live panel"
+          }
+        }
+      }
+    },
+    "Verberg log": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide log"
+          }
+        }
+      }
+    },
+    "Verbind": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect"
+          }
+        }
+      }
+    },
+    "Verbind een apparaat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a device"
+          }
+        }
+      }
+    },
+    "Verbind een apparaat (⌘⇧C)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a device (⌘⇧C)"
+          }
+        }
+      }
+    },
+    "Verbind een apparaat…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a device…"
+          }
+        }
+      }
+    },
+    "Versturen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "Versturen (Enter)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send (Enter)"
+          }
+        }
+      }
+    },
+    "Verwachte snelheid: ± %@ (geschat)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expected speed: ± %@ (estimated)"
+          }
+        }
+      }
+    },
+    "Verwijder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "Via IP-adres": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Via IP address"
+          }
+        }
+      }
+    },
+    "Volgende": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        }
+      }
+    },
+    "Voorbeeld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Example"
+          }
+        }
+      }
+    },
+    "Vraag iets aan %@…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask %@ anything…"
+          }
+        }
+      }
+    },
+    "Waar kan ik mee helpen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What can I help with?"
+          }
+        }
+      }
+    },
+    "Wacht op de engine…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the engine…"
+          }
+        }
+      }
+    },
+    "Wacht op model…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the model…"
+          }
+        }
+      }
+    },
+    "Wachtrij": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queue"
+          }
+        }
+      }
+    },
+    "Welkom bij AetherDrift": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welcome to AetherDrift"
+          }
+        }
+      }
+    },
+    "Werkt met elke OpenAI-compatibele app (Open WebUI, LibreChat, Continue, …).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works with any OpenAI-compatible app (Open WebUI, LibreChat, Continue, …)."
+          }
+        }
+      }
+    },
+    "Zet delen aan om je Mac te gebruiken vanaf je telefoon, een andere computer of een app zoals Open WebUI. macOS kan één keer vragen of AetherDrift inkomende verbindingen mag accepteren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on sharing to use your Mac from your phone, another computer or an app like Open WebUI. macOS may ask once whether AetherDrift may accept incoming connections."
+          }
+        }
+      }
+    },
+    "Zoek": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "Zoek een model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for a model"
+          }
+        }
+      }
+    },
+    "curl": {
+      "shouldTranslate": false
+    },
+    "gestopt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "stopped"
+          }
+        }
+      }
+    },
+    "ingekort (geheugen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cut short (memory)"
+          }
+        }
+      }
+    },
+    "of sleep een modelmap hierheen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "or drag a model folder here"
+          }
+        }
+      }
+    },
+    "± %@ (geschat)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ (estimated)"
+          }
+        }
+      }
+    },
+    "—": {
+      "shouldTranslate": false
+    },
+    "•": {
+      "shouldTranslate": false
+    }
+  },
+  "version": "1.0"
+}

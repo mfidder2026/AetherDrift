@@ -6,6 +6,8 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var chosen: String?
     @State private var ssdTested = false
+    /// While a large model downloads, a small starter model is fetched first to chat with.
+    @State private var starter: CatalogEntry?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,14 +74,14 @@ struct OnboardingView: View {
 
     private var engineText: String {
         switch state.supervisor.status {
-        case .ready: "Klaar"
-        case .installing: "Installeren (eenmalig, ± 1 minuut)…"
-        case .failed(let m): "Fout: \(m.prefix(120))"
-        default: "Starten…"
+        case .ready: String(localized: "Klaar")
+        case .installing: String(localized: "Installeren (eenmalig, ± 1 minuut)…")
+        case .failed(let m): String(localized: "Fout: \(String(m.prefix(120)))")
+        default: String(localized: "Starten…")
         }
     }
 
-    private func checkRow(_ label: String, value: String?, done: Bool) -> some View {
+    private func checkRow(_ label: LocalizedStringKey, value: String?, done: Bool) -> some View {
         HStack {
             Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted")
                 .foregroundStyle(done ? .green : .secondary)
@@ -152,7 +154,7 @@ struct OnboardingView: View {
                         Text("Verwachte snelheid: ± \(Format.tps(tps)) (geschat)").font(.caption).foregroundStyle(.tertiary)
                     }
                     if !loadable {
-                        Text("Vraagt de Drift Engine, die nog in ontwikkeling is.").font(.caption).foregroundStyle(.orange)
+                        Text("Past niet op deze Mac, ook niet via Drift.").font(.caption).foregroundStyle(.orange)
                     }
                 }
                 Spacer()
@@ -172,7 +174,12 @@ struct OnboardingView: View {
     private var starting: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Bijna klaar").font(.largeTitle.bold())
-            if let chosen, let dl = state.downloads[chosen] {
+            if let starter, let chosen {
+                Text("Je kunt zo al chatten met \(starter.name). \(chosen.split(separator: "/").last.map(String.init) ?? chosen) downloadt intussen verder en wordt automatisch geladen zodra het binnen is.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let current = starter?.repo ?? chosen, let dl = state.downloads[current] {
                 Text("Model downloaden…").font(.title3)
                 if let f = dl.fraction {
                     ProgressView(value: f)
@@ -192,6 +199,9 @@ struct OnboardingView: View {
             HStack {
                 Button("Terug") {
                     if let chosen { Task { await state.cancelDownload(chosen) } }
+                    if let starter { Task { await state.cancelDownload(starter.repo) } }
+                    state.switchAfterDownload = nil
+                    starter = nil
                     step = 1
                 }
                 Spacer()
@@ -206,8 +216,24 @@ struct OnboardingView: View {
         let isLocal = state.models?.local.contains { $0.id == id } ?? false
         if isLocal {
             await state.load(id)
-        } else {
-            await state.download(id, thenLoad: true)
+            return
         }
+        // A large download takes a while: chat with the small starter model in the meantime
+        // and switch automatically once the chosen model is in (start-prompt-v2 M6).
+        let catalog = state.models?.catalog ?? []
+        if let chosenEntry = catalog.first(where: { $0.repo == id }),
+           let s = catalog.first(where: { $0.role == "starter" && $0.repo != id && $0.fit.loadable }),
+           chosenEntry.sizeBytes > 4 * s.sizeBytes {
+            starter = s
+            state.switchAfterDownload = id
+            await state.download(id, thenLoad: false)
+            if s.downloaded {
+                await state.load(s.repo)
+            } else {
+                await state.download(s.repo, thenLoad: true)
+            }
+            return
+        }
+        await state.download(id, thenLoad: true)
     }
 }

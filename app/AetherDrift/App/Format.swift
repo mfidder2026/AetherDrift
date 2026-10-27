@@ -25,18 +25,18 @@ enum Format {
 
     static func modeName(_ mode: String?) -> String {
         switch mode {
-        case "resident": "In RAM"
-        case "drift-dense", "drift-moe": "Drift"
-        case "too_large": "Te groot"
+        case "resident": String(localized: "In RAM")
+        case "drift-dense", "drift-moe": String(localized: "Drift")
+        case "too_large": String(localized: "Te groot")
         default: "—"
         }
     }
 
     static func presetName(_ preset: String) -> String {
         switch preset {
-        case "snel": "Snel"
-        case "lange_context": "Lange context"
-        default: "Balans"
+        case "snel": String(localized: "Snel")
+        case "lange_context": String(localized: "Lange context")
+        default: String(localized: "Balans")
         }
     }
 }

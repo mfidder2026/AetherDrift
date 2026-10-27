@@ -36,6 +36,14 @@ struct AetherDriftApp: App {
             SettingsView()
                 .environment(state)
         }
+
+        MenuBarExtra {
+            MenuBarContent()
+                .environment(state)
+        } label: {
+            MenuBarLabel()
+                .environment(state)
+        }
     }
 }
 
@@ -46,7 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { Self.state?.supervisor.stop() }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// Keeps serving other devices from the menu bar when the window closes (§8.9).
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MainActor.assumeIsolated { !(Self.state?.keepRunning ?? false) }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -67,11 +78,15 @@ enum WindowSnapshotter {
         Task { @MainActor in
             for _ in 0..<600 {
                 try? await Task.sleep(for: .seconds(1))
-                guard let view = NSApp.windows.first(where: { $0.isVisible })?.contentView?.superview,
-                      let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
-                view.cacheDisplay(in: view.bounds, to: rep)
-                let data = rep.representation(using: .png, properties: [:])
-                try? data?.write(to: directory.appending(path: "latest.png"))
+                // latest.png is the main window; sheets and panels get latest-1.png, latest-2.png, …
+                let windows = NSApp.windows.filter { $0.isVisible && $0.contentView != nil }
+                for (i, window) in windows.enumerated() {
+                    guard let view = window.contentView?.superview,
+                          let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    let data = rep.representation(using: .png, properties: [:])
+                    try? data?.write(to: directory.appending(path: i == 0 ? "latest.png" : "latest-\(i).png"))
+                }
             }
         }
     }
@@ -102,6 +117,8 @@ struct AppCommands: Commands {
                 state.showLog.toggle()
             }
             .keyboardShortcut("l")
+            Button("Verbind een apparaat…") { state.showConnect = true }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
         }
     }
 }

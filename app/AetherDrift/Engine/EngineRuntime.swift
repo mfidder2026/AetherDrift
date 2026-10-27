@@ -7,10 +7,15 @@ struct EngineRuntime: Sendable {
     let engineDir: URL
     let uv: URL
     let supportDir: URL
+    /// Release builds carry their own Python and packages (scripts/bundle-runtime.sh); then
+    /// nothing is installed and no internet is needed.
+    var bundledRuntime: URL?
 
     var runtimeDir: URL { supportDir.appending(path: "runtime") }
     var venv: URL { runtimeDir.appending(path: "venv") }
-    var python: URL { venv.appending(path: "bin/python") }
+    var python: URL {
+        bundledRuntime.map { $0.appending(path: "python/bin/python3.12") } ?? venv.appending(path: "bin/python")
+    }
 
     static func locate() throws -> EngineRuntime {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -25,7 +30,10 @@ struct EngineRuntime: Sendable {
         guard FileManager.default.isExecutableFile(atPath: uv.path) else {
             throw RuntimeError("uv ontbreekt in de app (\(uv.path)).")
         }
-        return EngineRuntime(engineDir: engine, uv: uv, supportDir: support)
+        let bundled = resources.appending(path: "runtime")
+        let hasBundled = env["AETHER_ENGINE_DIR"] == nil
+            && FileManager.default.isExecutableFile(atPath: bundled.appending(path: "python/bin/python3.12").path)
+        return EngineRuntime(engineDir: engine, uv: uv, supportDir: support, bundledRuntime: hasBundled ? bundled : nil)
     }
 
     /// The installed runtime is tied to the exact lock file it was built from.
@@ -36,7 +44,8 @@ struct EngineRuntime: Sendable {
     }
 
     var isInstalled: Bool {
-        FileManager.default.fileExists(atPath: marker.path)
+        if bundledRuntime != nil { return true }
+        return FileManager.default.fileExists(atPath: marker.path)
             && FileManager.default.isExecutableFile(atPath: python.path)
     }
 
@@ -80,7 +89,13 @@ struct EngineRuntime: Sendable {
 
     func launchSpec(port: Int, parentPID: Int32) -> LaunchSpec {
         var env = ProcessInfo.processInfo.environment
-        env["PYTHONPATH"] = engineDir.path
+        if let bundledRuntime {
+            env["PYTHONPATH"] = engineDir.path + ":" + bundledRuntime.appending(path: "site-packages").path
+            env["PYTHONNOUSERSITE"] = "1"
+            env.removeValue(forKey: "PYTHONHOME")
+        } else {
+            env["PYTHONPATH"] = engineDir.path
+        }
         env["PYTHONDONTWRITEBYTECODE"] = "1"  // never write into the signed app bundle
         env["PYTHONUNBUFFERED"] = "1"
         return LaunchSpec(
