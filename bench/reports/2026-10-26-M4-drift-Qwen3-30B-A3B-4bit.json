@@ -1,0 +1,38 @@
+{
+  "model": "mlx-community/Qwen3-30B-A3B-4bit",
+  "weights_budget": "4GB",
+  "layers": 48,
+  "pinned": null,
+  "streamed_bytes_per_token": 0,
+  "runs": [
+    {
+      "decode_tps": 9.43,
+      "ttft_ms": 2238,
+      "io_bound_tps": NaN,
+      "efficiency": NaN,
+      "read_gbps_avg": 3.929948745510638
+    },
+    {
+      "decode_tps": 10.62,
+      "ttft_ms": 1726,
+      "io_bound_tps": NaN,
+      "efficiency": NaN,
+      "read_gbps_avg": 4.182163699865853
+    },
+    {
+      "decode_tps": 10.51,
+      "ttft_ms": 1681,
+      "io_bound_tps": NaN,
+      "efficiency": NaN,
+      "read_gbps_avg": 4.264158660243902
+    }
+  ],
+  "hit_rate": 0.934,
+  "stall_seconds": 12.616,
+  "mlx_peak_bytes": 3843021022,
+  "kv_bytes": 25165824,
+  "baseline_footprint": 62669544,
+  "peak_footprint": 4353740664,
+  "swap_growth": 0,
+  "page_cache_invalidated": true
+}

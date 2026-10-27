@@ -1,0 +1,38 @@
+{
+  "model": "mlx-community/Qwen2.5-7B-Instruct-4bit",
+  "weights_budget": "2GB",
+  "layers": 28,
+  "pinned": 7,
+  "streamed_bytes_per_token": 2773217167,
+  "runs": [
+    {
+      "decode_tps": 1.99,
+      "ttft_ms": 1240,
+      "io_bound_tps": 2.441208023864797,
+      "efficiency": 0.8151701864593796,
+      "read_gbps_avg": 5.336377509108248
+    },
+    {
+      "decode_tps": 2.48,
+      "ttft_ms": 1204,
+      "io_bound_tps": 2.441208023864797,
+      "efficiency": 1.0158904836277696,
+      "read_gbps_avg": 6.628979624884615
+    },
+    {
+      "decode_tps": 2.48,
+      "ttft_ms": 1199,
+      "io_bound_tps": 2.441208023864797,
+      "efficiency": 1.0158904836277696,
+      "read_gbps_avg": 6.709123848448718
+    }
+  ],
+  "hit_rate": 0.246,
+  "stall_seconds": 56.853,
+  "mlx_peak_bytes": 2188014524,
+  "kv_bytes": 14680064,
+  "baseline_footprint": 56804072,
+  "peak_footprint": 3137030712,
+  "swap_growth": 0,
+  "page_cache_invalidated": true
+}

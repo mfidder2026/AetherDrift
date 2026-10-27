@@ -1,0 +1,42 @@
+{
+  "model": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+  "engine": {
+    "ready_s": 0.2324762499993085,
+    "load_s": 1.0515824169997359,
+    "runs": [
+      {
+        "client_ttft_ms": 115.65591699945799,
+        "client_decode_tps": 483.3327212702574,
+        "engine_decode_tps": 484.32,
+        "tokens": 256
+      },
+      {
+        "client_ttft_ms": 14.500083001621533,
+        "client_decode_tps": 486.61351597823966,
+        "engine_decode_tps": 487.77,
+        "tokens": 256
+      },
+      {
+        "client_ttft_ms": 13.767874999757623,
+        "client_decode_tps": 486.07540826311117,
+        "engine_decode_tps": 487.2,
+        "tokens": 256
+      }
+    ]
+  },
+  "baseline": [
+    {
+      "decode_tps": 486.0874093397835,
+      "tokens": 256
+    },
+    {
+      "decode_tps": 485.05748215411074,
+      "tokens": 256
+    },
+    {
+      "decode_tps": 485.15086155547914,
+      "tokens": 256
+    }
+  ],
+  "overhead": -0.0019056890977535712
+}

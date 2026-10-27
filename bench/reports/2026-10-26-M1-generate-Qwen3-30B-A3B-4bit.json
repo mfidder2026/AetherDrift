@@ -1,0 +1,42 @@
+{
+  "model": "mlx-community/Qwen3-30B-A3B-4bit",
+  "engine": {
+    "ready_s": 0.23176312500072527,
+    "load_s": 1.6408115000012913,
+    "runs": [
+      {
+        "client_ttft_ms": 120.81737500011513,
+        "client_decode_tps": 113.42862598232064,
+        "engine_decode_tps": 113.78,
+        "tokens": 256
+      },
+      {
+        "client_ttft_ms": 49.59279200011224,
+        "client_decode_tps": 112.8738510756254,
+        "engine_decode_tps": 113.23,
+        "tokens": 256
+      },
+      {
+        "client_ttft_ms": 49.9201250004262,
+        "client_decode_tps": 113.2538857324687,
+        "engine_decode_tps": 113.61,
+        "tokens": 256
+      }
+    ]
+  },
+  "baseline": [
+    {
+      "decode_tps": 113.28344031180451,
+      "tokens": 256
+    },
+    {
+      "decode_tps": 112.95115728332017,
+      "tokens": 256
+    },
+    {
+      "decode_tps": 112.46105046056634,
+      "tokens": 256
+    }
+  ],
+  "overhead": -0.0026801712919963805
+}
