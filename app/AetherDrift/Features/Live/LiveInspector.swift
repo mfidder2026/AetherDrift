@@ -24,6 +24,10 @@ struct LiveInspector: View {
                     StatRow(label: "Cache-hit", value: s.drift.hitRate.map {
                         $0.formatted(.percent.precision(.fractionLength(0)))
                     } ?? "—")
+                    if state.settings?.turbo == true, let skipped = s.drift.skippedShare {
+                        StatRow(label: "Turbo overgeslagen",
+                                value: skipped.formatted(.percent.precision(.fractionLength(0))))
+                    }
                     StatRow(label: "Laag", value: layer(s.drift))
                     if !s.drift.layerResidency.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {

@@ -30,6 +30,16 @@
         }
       }
     },
+    "%@ · Turbo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Turbo"
+          }
+        }
+      }
+    },
     "%lld GB": {},
     "%lld tokens": {
       "localizations": {
@@ -209,6 +219,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Devices using the current key will have to reconnect."
+          }
+        }
+      }
+    },
+    "Automatisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
           }
         }
       }
@@ -530,6 +550,16 @@
         }
       }
     },
+    "Geen antwoord: het model was nog aan het nadenken toen het stopte.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No answer: the model was still thinking when it stopped."
+          }
+        }
+      }
+    },
     "Geen model": {
       "localizations": {
         "en": {
@@ -626,6 +656,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Done"
+          }
+        }
+      }
+    },
+    "Grondig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thorough"
           }
         }
       }
@@ -847,6 +887,16 @@
         }
       }
     },
+    "Kort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brief"
+          }
+        }
+      }
+    },
     "Krap": {
       "localizations": {
         "en": {
@@ -945,6 +995,16 @@
         }
       }
     },
+    "Maximaal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum"
+          }
+        }
+      }
+    },
     "Maximaal %lld GB": {
       "localizations": {
         "en": {
@@ -1002,6 +1062,16 @@
         }
       }
     },
+    "Modellen zoals GLM en Qwen3 kunnen eerst nadenken en dan antwoorden. Dat geeft betere antwoorden op moeilijke vragen, maar kost tijd: via Drift soms vele minuten. Automatisch slaat het nadenken over als een model via Drift draait en houdt het kort als het model in het geheugen past.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Models such as GLM and Qwen3 can think before they answer. That gives better answers to hard questions, but takes time: via Drift sometimes many minutes. Automatic skips thinking when a model runs via Drift and keeps it brief when the model fits in memory."
+          }
+        }
+      }
+    },
     "Modus": {
       "localizations": {
         "en": {
@@ -1018,6 +1088,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fast mode"
+          }
+        }
+      }
+    },
+    "Nadenken": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking"
+          }
+        }
+      }
+    },
+    "Nadenken voor het antwoord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Think before answering"
+          }
+        }
+      }
+    },
+    "Nadenken: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking: %@"
           }
         }
       }
@@ -1108,6 +1208,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ollama clients use %@ with the same key."
+          }
+        }
+      }
+    },
+    "Ongeveer twee keer zo snel bij modellen als GLM die via Drift draaien, maar iets minder nauwkeurig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About twice as fast for models like GLM that run via Drift, but slightly less accurate"
           }
         }
       }
@@ -1547,6 +1657,26 @@
         }
       }
     },
+    "Turbo overgeslagen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turbo skipped"
+          }
+        }
+      }
+    },
+    "Turbo voor Drift-MoE": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turbo for Drift-MoE"
+          }
+        }
+      }
+    },
     "Uit": {
       "localizations": {
         "en": {
@@ -1687,6 +1817,16 @@
         }
       }
     },
+    "Voor grote MoE-modellen zoals GLM die via Drift draaien. Experts die nog niet in het geheugen staan en weinig bijdragen, worden overgeslagen. Ongeveer twee keer zo snel; de antwoorden wijken iets af, vergelijkbaar met een grovere quantisatie.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For large MoE models such as GLM that run via Drift. Experts that are not in memory yet and contribute little are skipped. About twice as fast; answers differ slightly, comparable to a coarser quantization."
+          }
+        }
+      }
+    },
     "Voorbeeld": {
       "localizations": {
         "en": {
@@ -1703,6 +1843,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ask %@ anything…"
+          }
+        }
+      }
+    },
+    "Vraag wordt gelezen · laag %lld van %lld": {
+      "localizations": {
+        "nl": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Vraag wordt gelezen · laag %1$lld van %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the prompt · layer %1$lld of %2$lld"
           }
         }
       }
@@ -1777,6 +1933,16 @@
         }
       }
     },
+    "Zet nadenken uit en probeer opnieuw": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off thinking and try again"
+          }
+        }
+      }
+    },
     "Zoek": {
       "localizations": {
         "en": {
@@ -1793,6 +1959,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search for a model"
+          }
+        }
+      }
+    },
+    "afgebroken (maximale lengte)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cut off (maximum length)"
           }
         }
       }

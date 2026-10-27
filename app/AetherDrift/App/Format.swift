@@ -32,6 +32,18 @@ enum Format {
         }
     }
 
+    static let thinkingLevels = ["auto", "off", "low", "high", "max"]
+
+    static func thinkingName(_ level: String?) -> String {
+        switch level {
+        case "off": String(localized: "Uit")
+        case "low": String(localized: "Kort")
+        case "high": String(localized: "Grondig")
+        case "max": String(localized: "Maximaal")
+        default: String(localized: "Automatisch")
+        }
+    }
+
     static func presetName(_ preset: String) -> String {
         switch preset {
         case "snel": String(localized: "Snel")

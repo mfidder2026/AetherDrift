@@ -140,6 +140,9 @@ struct MessageView: View {
                     ThinkingView(text: thinking, active: item.isThinking && item.state == .streaming)
                 }
                 MarkdownView(blocks: item.blocks)
+                if item.state == .complete, item.isThinking {
+                    NoAnswerNotice(isLast: isLast)
+                }
                 if item.state == .streaming {
                     Rectangle().frame(width: 7, height: 15).foregroundStyle(.secondary)
                         .accessibilityHidden(true)
@@ -152,9 +155,15 @@ struct MessageView: View {
     private var waitingText: String {
         switch state.supervisor.status {
         case .ready:
-            state.modelState?.state == "loading" ? String(localized: "Wacht op model…") : String(localized: "Bezig…")
+            if state.modelState?.state == "loading" { return String(localized: "Wacht op model…") }
+            // Via Drift the prompt takes a while: show how far it has come.
+            if let s = state.live.snapshot, s.model.mode?.hasPrefix("drift") == true,
+               let layer = s.drift.currentLayer, let total = s.drift.layersTotal {
+                return String(localized: "Vraag wordt gelezen · laag \(layer + 1) van \(total)")
+            }
+            return String(localized: "Bezig…")
         default:
-            String(localized: "Wacht op de engine…")
+            return String(localized: "Wacht op de engine…")
         }
     }
 
@@ -190,6 +199,7 @@ struct MessageView: View {
         if let mode = m.mode { parts.append(Format.modeName(mode)) }
         if m.finishReason == "cancelled" { parts.append(String(localized: "gestopt")) }
         if m.finishReason == "memory" { parts.append(String(localized: "ingekort (geheugen)")) }
+        if m.finishReason == "length" { parts.append(String(localized: "afgebroken (maximale lengte)")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -219,6 +229,7 @@ struct Composer: View {
                     return .handled
                 }
                 .accessibilityLabel("Bericht")
+            ThinkingMenu()
             if chat.isGenerating {
                 Button { chat.stop() } label: {
                     Image(systemName: "stop.circle.fill").font(.title2)
@@ -244,6 +255,55 @@ struct Composer: View {
         .padding(.top, 6)
         .frame(maxWidth: 860)
         .onAppear { focused = true }
+    }
+}
+
+/// Quick access to the thinking level; the same setting as in Instellingen.
+private struct ThinkingMenu: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let level = state.settings?.thinking ?? "auto"
+        Menu {
+            Picker("Nadenken", selection: Binding(
+                get: { level },
+                set: { new in Task { await state.setThinking(new) } }
+            )) {
+                ForEach(Format.thinkingLevels, id: \.self) { Text(Format.thinkingName($0)).tag($0) }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: level == "off" ? "lightbulb.slash" : "lightbulb")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(state.settings == nil)
+        .help("Nadenken: \(Format.thinkingName(level))")
+        .accessibilityLabel("Nadenken: \(Format.thinkingName(level))")
+    }
+}
+
+/// The reply ended inside the reasoning block: there is no answer to show.
+private struct NoAnswerNotice: View {
+    @Environment(AppState.self) private var state
+    let isLast: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Geen antwoord: het model was nog aan het nadenken toen het stopte.",
+                  systemImage: "lightbulb")
+                .foregroundStyle(.orange)
+            if isLast, state.settings?.thinking != "off" {
+                Button("Zet nadenken uit en probeer opnieuw") {
+                    Task {
+                        await state.setThinking("off")
+                        state.chat.regenerate()
+                    }
+                }
+                .controlSize(.small)
+            }
+        }
     }
 }
 

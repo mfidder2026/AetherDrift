@@ -23,6 +23,22 @@ struct SettingsView: View {
                 .pickerStyle(.radioGroup)
                 Text("Snel geeft het model zoveel mogelijk geheugen. Lange context ruimt plaats in voor lange gesprekken en documenten.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Turbo voor Drift-MoE", isOn: Binding(
+                    get: { state.settings?.turbo ?? false },
+                    set: { on in Task { await state.setTurbo(on) } }
+                ))
+                Text("Voor grote MoE-modellen zoals GLM die via Drift draaien. Experts die nog niet in het geheugen staan en weinig bijdragen, worden overgeslagen. Ongeveer twee keer zo snel; de antwoorden wijken iets af, vergelijkbaar met een grovere quantisatie.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Nadenken") {
+                Picker("Nadenken voor het antwoord", selection: Binding(
+                    get: { state.settings?.thinking ?? "auto" },
+                    set: { level in Task { await state.setThinking(level) } }
+                )) {
+                    ForEach(Format.thinkingLevels, id: \.self) { Text(Format.thinkingName($0)).tag($0) }
+                }
+                Text("Modellen zoals GLM en Qwen3 kunnen eerst nadenken en dan antwoorden. Dat geeft betere antwoorden op moeilijke vragen, maar kost tijd: via Drift soms vele minuten. Automatisch slaat het nadenken over als een model via Drift draait en houdt het kort als het model in het geheugen past.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Geavanceerd") {
                 Toggle("Reserve voor macOS automatisch", isOn: $autoReserve)

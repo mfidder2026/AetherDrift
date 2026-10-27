@@ -310,6 +310,26 @@ final class AppState {
         try? await supervisor.client?.setAPIKey(key)
     }
 
+    /// Takes effect on the next answer; no reload needed.
+    func setThinking(_ level: String) async {
+        guard let client = supervisor.client else { return }
+        do {
+            settings = try await client.updateSettings(["thinking": level])
+        } catch let error as APIError {
+            show(error)
+        } catch {}
+    }
+
+    /// Takes effect on the next token; no reload needed.
+    func setTurbo(_ on: Bool) async {
+        guard let client = supervisor.client else { return }
+        do {
+            settings = try await client.updateSettings(["turbo": on])
+        } catch let error as APIError {
+            show(error)
+        } catch {}
+    }
+
     func setMode(_ mode: String) async {
         guard let client = supervisor.client else { return }
         do {

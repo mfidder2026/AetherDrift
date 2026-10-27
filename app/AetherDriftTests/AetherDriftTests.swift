@@ -204,6 +204,20 @@ final class EngineSettingsEncodingTests: XCTestCase {
         XCTAssertNil(json["requires_reload"])
     }
 
+    func testThinkingAndTurboAreSentOnlyWhenKnown() throws {
+        var s = EngineSettings(mode: "balans", share: false, allowClientModelSwitch: false, osReserveGb: nil,
+                               engineOverheadGb: 2, weightsBudgetGb: nil, prefillStepSize: 2048,
+                               promptCacheEntries: 3)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: API.encoder.encode(s)) as? [String: Any])
+        XCTAssertNil(json["thinking"])  // settings saved by an older build leave the engine's alone
+        XCTAssertNil(json["turbo"])
+        s.thinking = "off"
+        s.turbo = true
+        json = try XCTUnwrap(JSONSerialization.jsonObject(with: API.encoder.encode(s)) as? [String: Any])
+        XCTAssertEqual(json["thinking"] as? String, "off")
+        XCTAssertEqual(json["turbo"] as? Bool, true)
+    }
+
     func testNetworkAddressPutsKeyInFragment() {
         let a = NetworkAddress(hostName: "studio.local", ip: "192.168.1.20", port: 8080)
         XCTAssertEqual(a.baseURL, "http://studio.local:8080/v1")

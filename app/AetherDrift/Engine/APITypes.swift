@@ -115,6 +115,7 @@ struct StatsSnapshot: Decodable, Sendable, Equatable {
         let stallSeconds: Double?
         let expertSlots: Int?
         let expertsTotal: Int?
+        let skippedShare: Double?  // Turbo: share of routed experts skipped
     }
 
     struct Generation: Decodable, Sendable, Equatable {
@@ -178,6 +179,8 @@ struct EngineSettings: Codable, Sendable, Equatable {
     var weightsBudgetGb: Double?
     var prefillStepSize: Int
     var promptCacheEntries: Int
+    var thinking: String?  // auto | off | low | high | max; nil = engine default
+    var turbo: Bool?
     var requiresReload: Bool?
 
     /// nil means "automatic" for the two optional limits, so it is sent as an explicit null;
@@ -192,6 +195,8 @@ struct EngineSettings: Codable, Sendable, Equatable {
         try c.encode(weightsBudgetGb, forKey: .weightsBudgetGb)
         try c.encode(prefillStepSize, forKey: .prefillStepSize)
         try c.encode(promptCacheEntries, forKey: .promptCacheEntries)
+        try c.encodeIfPresent(thinking, forKey: .thinking)
+        try c.encodeIfPresent(turbo, forKey: .turbo)
         try c.encodeIfPresent(requiresReload, forKey: .requiresReload)
     }
 }
