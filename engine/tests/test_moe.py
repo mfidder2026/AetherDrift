@@ -11,6 +11,7 @@ from pathlib import Path
 
 import httpx
 import mlx.core as mx
+import mlx.nn as nn
 import numpy as np
 import pytest
 
@@ -136,6 +137,8 @@ def test_drift_moe_matches_resident(tmp_path: Path) -> None:
             "0",
             "--data-dir",
             str(tmp_path),
+            "--log-dir",
+            str(tmp_path / "logs"),
             "--weights-budget",
             "4GB",
             "--model",
@@ -167,7 +170,13 @@ def test_drift_moe_matches_resident(tmp_path: Path) -> None:
             r = httpx.post(
                 f"{url}/v1/chat/completions",
                 timeout=300,
-                json={"messages": msgs, "temperature": 0, "max_tokens": 48},
+                # Drift turns thinking off by default; the reference uses the template default.
+                json={
+                    "messages": msgs,
+                    "temperature": 0,
+                    "max_tokens": 48,
+                    "reasoning_effort": "max",
+                },
             ).json()
             assert r["choices"][0]["message"]["content"] == ref
         stats = httpx.get(f"{url}/aether/v1/stats").json()
@@ -215,11 +224,11 @@ class _FailingReads:
         self.inner = inner
         self.fail = False
 
-    def submit_unaligned(self, req, dest):  # noqa: ANN001
+    def submit_unaligned(self, req, dest, background=False):  # noqa: ANN001
         from concurrent.futures import Future
 
         if not self.fail:
-            return self.inner.submit_unaligned(req, dest)
+            return self.inner.submit_unaligned(req, dest, background)
         f: Future[None] = Future()
         f.set_exception(OSError(5, "Input/output error"))
         return f
@@ -252,3 +261,125 @@ def test_failed_read_never_leaves_expert_mapped(tmp_path: Path) -> None:
         assert mx.array_equal(
             cache.layers[1].tensors["up_proj.weight"][int(mapping[e])], ref[e]
         ).item()
+
+
+class _HeldBackground:
+    """Speculative reads stay in flight until released; reads that are needed are real."""
+
+    def __init__(self, inner: PreadBackend) -> None:
+        self.inner = inner
+        self.held: list = []
+
+    def submit_unaligned(self, req, dest, background=False):  # noqa: ANN001
+        from concurrent.futures import Future
+
+        if not background:
+            return self.inner.submit_unaligned(req, dest)
+        f: Future[None] = Future()
+        self.held.append(f)
+        return f
+
+    def __getattr__(self, name: str):  # noqa: ANN204
+        return getattr(self.inner, name)
+
+
+def test_needed_reads_never_wait_for_a_wrong_guess(tmp_path: Path) -> None:
+    """Regression: a layer used to wait for its mispredicted prefetches before loading."""
+    import threading
+
+    model, _, cache, _ = _cache(tmp_path, slots=6)
+    held = _HeldBackground(cache.backend)
+    cache.backend = held
+    ref = _reference(model, 1, "up_proj.weight")
+    cache.tick()
+    cache.ensure(0, np.array([1, 2]), decode=True, prefetch=(1, np.array([7, 8])))
+    assert held.held  # the guesses for layer 1 are still in flight
+    result: dict = {}
+    t = threading.Thread(
+        target=lambda: result.update(m=np.array(cache.ensure(1, np.array([3, 4]), decode=True)))
+    )
+    try:
+        t.start()
+        t.join(timeout=10)
+        assert not t.is_alive(), "layer 1 waited for its wrong guesses"
+        for e in (3, 4):
+            slot = int(result["m"][e])
+            assert mx.array_equal(cache.layers[1].tensors["up_proj.weight"][slot], ref[e]).item()
+    finally:
+        for f in held.held:
+            f.set_result(None)
+        t.join(timeout=10)
+
+
+def test_turbo_skips_only_light_missing_experts(tmp_path: Path) -> None:
+    _, _, cache, _ = _cache(tmp_path, slots=4)
+    cache.tick()
+    cache.ensure(0, np.array([1, 2]), decode=True)  # 1 and 2 are in RAM
+    experts = np.array([[1, 5, 6, 2], [7, 6, 3, 4]])
+    weights = np.array([[0.05, 0.05, 0.6, 0.3], [0.5, 0.05, 0.4, 0.05]])
+    keep = cache.keep_mask(0, experts, weights, share=0.1)
+    # 1, 2: in RAM. 6: heavy for token 0, so loaded and used for token 1 as well.
+    # 5, 4: light and missing. 7, 3: heavy.
+    assert keep.tolist() == [[True, False, True, True], [True, True, True, False]]
+    assert cache.skipped == 2 and cache.routed == 8
+
+
+def test_turbo_switch_rescales_kept_experts(tmp_path: Path) -> None:
+    """Skipped choices add nothing and are never read; the rest carry the full weight."""
+    from aether.drift.model import DriftSwitch
+
+    _, _, cache, _ = _cache(tmp_path, slots=4)
+    cache.skip_share = lambda: 0.2
+
+    class Inner(nn.Module):
+        def __call__(self, x: mx.array, idx: mx.array) -> mx.array:
+            out = mx.ones((*idx.shape, 3))
+            return mx.concatenate([out[..., :2, :], out[..., 2:, :] * mx.inf], axis=-2)
+
+    w = mx.array([[[0.5, 0.4, 0.1]]])
+    switch = DriftSwitch(Inner(), 0, cache, LAYERS)
+    switch._gate = lambda x: (mx.array([[[2, 9, 11]]]), w)
+    out = switch(mx.zeros((1, 1, 4)), mx.array([[[2, 9, 11]]]))
+    # The skipped choice ran on garbage (inf here): it must come out as 0, not NaN.
+    np.testing.assert_allclose(np.array(out)[0, 0, :, 0], [1 / 0.9, 1 / 0.9, 0], rtol=1e-6)
+    assert cache.layers[0].slot_of[11] < 0  # the light expert was never loaded
+    assert cache.layers[0].slot_of[2] >= 0 and cache.layers[0].slot_of[9] >= 0
+
+
+def test_turbo_never_skips_a_tokens_heaviest_choice(tmp_path: Path) -> None:
+    _, _, cache, _ = _cache(tmp_path, slots=4)
+    experts = np.array([[1, 2, 3, 4]])
+    keep = cache.keep_mask(0, experts, np.array([[0.3, 0.25, 0.25, 0.2]]), share=0.5)
+    assert keep.tolist() == [[True, False, False, False]]
+
+
+class _OpenFails:
+    """The second tensor of an expert cannot be read (e.g. its shard cannot be opened)."""
+
+    def __init__(self, inner: PreadBackend) -> None:
+        self.inner = inner
+        self.calls = 0
+
+    def submit_unaligned(self, req, dest, background=False):  # noqa: ANN001
+        self.calls += 1
+        if self.calls == 2:
+            raise OSError(24, "Too many open files")
+        return self.inner.submit_unaligned(req, dest, background)
+
+    def __getattr__(self, name: str):  # noqa: ANN204
+        return getattr(self.inner, name)
+
+
+def test_failed_submit_never_leaves_expert_mapped(tmp_path: Path) -> None:
+    """Regression: the expert was mapped before its reads were submitted."""
+    model, _, cache, _ = _cache(tmp_path, slots=3)
+    failing = _OpenFails(cache.backend)
+    cache.backend = failing
+    with pytest.raises(OSError):
+        cache.ensure(0, np.array([4]), decode=True)
+    ls = cache.layers[0]
+    assert ls.slot_of[4] < 0
+    cache.backend = failing.inner
+    mapping = np.array(cache.ensure(0, np.array([4]), decode=True))
+    ref = _reference(model, 0, "up_proj.weight")
+    assert mx.array_equal(ls.tensors["up_proj.weight"][int(mapping[4])], ref[4]).item()

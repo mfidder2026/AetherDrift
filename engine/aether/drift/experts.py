@@ -36,8 +36,11 @@ from .units import SAFETENSORS_DTYPES
 
 log = logging.getLogger("aether.experts")
 
-HALF_LIFE_TOKENS = 256
+HALF_LIFE_TOKENS = 16  # experts follow the topic (bench/reports/2026-10-27-GLM-speed.md)
 HIT_WINDOW = 4096
+# Turbo: a missing expert with less than this share of its token's routed weight is skipped.
+TURBO_SKIP_SHARE = 0.12
+SKIP_WINDOW = 4096  # MoE layer calls (~50 tokens of GLM) behind the Live panel's skip share
 _SWITCH_RE = re.compile(r"layers\.(\d+)\.(.*?switch_mlp)\.(.+)$")
 
 
@@ -166,6 +169,11 @@ class ExpertCache:
         self.prefetch_enabled: Any = lambda: True  # set by the worker (live setting)
         self.prefetch_issued = 0
         self.prefetch_used = 0
+        # Turbo (live setting): weight share below which a missing expert is skipped; 0 = off.
+        self.skip_share: Any = lambda: 0.0
+        self.routed = 0
+        self.skipped = 0
+        self._skips: deque[tuple[int, int]] = deque(maxlen=SKIP_WINDOW)  # (routed, skipped)
 
     @property
     def resident_bytes(self) -> int:
@@ -189,21 +197,14 @@ class ExpertCache:
             return []
         for slot in [s for s, f in ls.pending.items() if f.done()]:
             self._settle(layer, slot)  # finished reads: slot is evictable again
-        if required:
-            # Reads still in flight for experts we do not need now: let them finish so
-            # their slots can be reused.
+        free = self._free_slots(ls, now, protect, len(missing))
+        if required and len(free) < len(missing):
+            # Only with very few slots: wait for reads in flight for experts we do not need
+            # now, so their slots can be reused. Normally there are plenty of other victims
+            # and a wrong guess never delays a read that is needed.
             for slot in [s for s in ls.pending if int(ls.owner[s]) not in protect]:
                 self._settle(layer, slot)
-        free = [s for s in range(ls.slots) if ls.owner[s] < 0]
-        if len(free) < len(missing):
-            score = ls.score(now)
-            candidates = [
-                s
-                for s in range(ls.slots)
-                if ls.owner[s] >= 0 and int(ls.owner[s]) not in protect and s not in ls.pending
-            ]
-            candidates.sort(key=lambda s: score[s])
-            free += candidates[: len(missing) - len(free)]
+            free = self._free_slots(ls, now, protect, len(missing))
         if required and len(free) < len(missing):
             raise RuntimeError(f"layer {layer}: no free expert slots")
         evicted = 0
@@ -212,24 +213,34 @@ class ExpertCache:
             old = int(ls.owner[slot])
             if old >= 0:
                 ls.slot_of[old] = -1
+                ls.owner[slot] = -1
                 evicted += 1
+            ls.prefetched.discard(old)
+            reads: list[Future[Any]] = []
+            try:
+                for t in ls.plan.tensors:
+                    dest = memoryview(ls.host[t.name])[slot * t.stride : (slot + 1) * t.stride]
+                    req = ReadRequest(t.file, t.offset + expert * t.stride, t.stride)
+                    reads.append(self.backend.submit_unaligned(req, dest, background=not required))
+            except Exception:
+                # E.g. a shard that cannot be opened. The slot stays unmapped, and blocked
+                # until the reads that did start have stopped writing into it.
+                if reads:
+                    ls.pending[slot] = _all_of(reads)
+                if required:
+                    raise
+                break
             ls.owner[slot] = expert
             ls.slot_of[expert] = slot
             ls.count[slot] = 0.0
             ls.last[slot] = now
-            reads = []
-            for t in ls.plan.tensors:
-                dest = memoryview(ls.host[t.name])[slot * t.stride : (slot + 1) * t.stride]
-                req = ReadRequest(t.file, t.offset + expert * t.stride, t.stride)
-                reads.append(self.backend.submit_unaligned(req, dest))
             fut = _all_of(reads)
             ls.pending[slot] = fut
             futures.append(fut)
-            ls.prefetched.discard(old)
             if not required:
                 ls.prefetched.add(expert)
                 self.prefetch_issued += 1
-        loaded = min(len(missing), len(free))
+        loaded = len(futures)
         if loaded:
             self.events.publish(
                 "load", unit=f"L{layer}", experts=loaded, bytes=loaded * ls.plan.bytes_per_expert
@@ -239,6 +250,21 @@ class ExpertCache:
                 "evict", unit=f"L{layer}", experts=evicted, bytes=evicted * ls.plan.bytes_per_expert
             )
         return futures
+
+    @staticmethod
+    def _free_slots(ls: LayerSlots, now: float, protect: set[int], want: int) -> list[int]:
+        """Empty slots first, then the lowest-scoring resident experts outside `protect`."""
+        free = [s for s in range(ls.slots) if ls.owner[s] < 0 and s not in ls.pending]
+        if len(free) < want:
+            score = ls.score(now)
+            candidates = [
+                s
+                for s in range(ls.slots)
+                if ls.owner[s] >= 0 and int(ls.owner[s]) not in protect and s not in ls.pending
+            ]
+            candidates.sort(key=lambda s: score[s])
+            free += candidates[: want - len(free)]
+        return free
 
     def _settle(self, layer: int, slot: int, raise_errors: bool = False) -> None:
         """Collect a slot's finished (or still running) read.
@@ -324,6 +350,25 @@ class ExpertCache:
         mapping = np.where(ls.slot_of >= 0, ls.slot_of, 0).astype(np.int32)
         return mx.array(mapping)
 
+    def keep_mask(
+        self, layer: int, experts: np.ndarray, weights: np.ndarray, share: float
+    ) -> np.ndarray:
+        """Turbo: which routed choices to compute (same shape as `experts`, [..., k]).
+
+        A choice is skipped when its expert is neither in RAM nor on its way and it carries
+        less than `share` of its token's routed weight. A token's heaviest choice and experts
+        that are loaded anyway for another choice are never skipped.
+        """
+        ls = self.layers[layer]
+        w = weights / np.maximum(weights.sum(axis=-1, keepdims=True), 1e-9)
+        keep = (ls.slot_of[experts] >= 0) | (w >= share) | (w >= w.max(axis=-1, keepdims=True))
+        keep = np.isin(experts, experts[keep])
+        skipped = int(experts.size - keep.sum())
+        self.routed += experts.size
+        self.skipped += skipped
+        self._skips.append((experts.size, skipped))
+        return keep
+
     def prefill_weights(self, layer: int, experts: np.ndarray) -> dict[str, mx.array]:
         """Full-size expert tensors for `layer` holding at least `experts` (prefill path).
 
@@ -390,6 +435,11 @@ class ExpertCache:
             prefetch_accuracy=(
                 round(self.prefetch_used / self.prefetch_issued, 3)
                 if self.prefetch_issued
+                else None
+            ),
+            skipped_share=(
+                round(sum(s for _, s in self._skips) / sum(r for r, _ in self._skips), 3)
+                if self._skips
                 else None
             ),
         )

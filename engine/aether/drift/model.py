@@ -117,27 +117,46 @@ class DriftSwitch(nn.Module):
         self._first = layer == cache.order[0]
         self._last = layer == cache.order[-1]
         self._next: tuple[int, Any] | None = None  # (next MoE layer, its MoE block) for prefetch
+        self._gate: Any = None  # this block's router, for Turbo (routers that return weights)
 
     def __call__(self, x: mx.array, indices: mx.array) -> mx.array:
         cache = self._cache
         decode = indices.size == indices.shape[-1]  # one token
+        share = cache.skip_share() if self._gate is not None else 0.0
+        weights = None
+        if share > 0:
+            try:  # Turbo needs the routing weights: computed again here, the router is tiny.
+                weights = _routing(self._gate, x, 1)[1]
+            except ValueError:  # the router does not take the experts' input (latent MoE)
+                self._gate = None
+        pending = [indices] if weights is None else [indices, weights]
         predicted = None
         if decode and self._next is not None:
             # The next layer's router applied to this layer's input: the residual stream
             # changes little per layer, so this predicts most of its experts.
-            predicted = predict_experts(self._next[1], x, cache.plan.experts_per_token)
-            mx.eval(indices, predicted)
-        else:
-            mx.eval(indices)
+            try:
+                predicted = _routing(self._next[1].gate, x, cache.plan.experts_per_token)
+                pending += [a for a in predicted if a is not None]
+            except ValueError:  # as above: no prediction for this model
+                self._next = None
+        mx.eval(pending)
         idx = np.array(indices)
         if decode and self._first:
             cache.tick()
         cache.stats.update("drift", current_layer=self._layer)
-        needed = np.unique(idx)
+        keep = None
+        if weights is not None:
+            w = np.array(weights.astype(mx.float32))
+            keep = cache.keep_mask(self._layer, idx, w, share)
+        needed = np.unique(idx if keep is None else idx[keep])
         if decode:
             prefetch = None
             if predicted is not None and self._next is not None:
-                prefetch = (self._next[0], np.unique(np.array(predicted)))
+                guess = np.array(predicted[0])
+                if share > 0 and predicted[1] is not None:  # Turbo: only what would be kept
+                    pw = np.array(predicted[1].astype(mx.float32))
+                    guess = guess[pw / pw.sum(axis=-1, keepdims=True) >= share]
+                prefetch = (self._next[0], np.unique(guess))
             mapping = cache.ensure(self._layer, needed, decode=True, prefetch=prefetch)
             out = self.inner(x, mapping[indices])
         else:
@@ -148,17 +167,25 @@ class DriftSwitch(nn.Module):
             out = self.inner(x, indices)
             mx.eval(out)  # the prefill buffer is reused by the next layer
             self.inner.update(tree_unflatten(list(cache.layers[self._layer].tensors.items())))
+        if keep is not None and not keep.all():
+            # Skipped choices contribute nothing; the token's other experts carry its whole
+            # routed weight (as if it had been routed to fewer experts). where(), not ×0: a
+            # skipped choice ran on whatever weights its row held.
+            scale = np.where(keep, w.sum(-1, keepdims=True) / (w * keep).sum(-1, keepdims=True), 0)
+            scaled = out * mx.array(scale[..., None]).astype(out.dtype)
+            out = mx.where(mx.array(keep[..., None]), scaled, 0)
         if self._last:
             cache.publish(self._layer, self._n_layers)
         return out
 
 
-def predict_experts(block: Any, x: mx.array, k: int) -> mx.array:
-    """Top-k experts the MoE `block` would pick for hidden state `x`."""
-    out = block.gate(x)
-    if isinstance(out, tuple):  # DeepSeek/GLM-style gates return (indices, scores)
-        return out[0]
-    return mx.argpartition(-out, kth=k - 1, axis=-1)[..., :k]
+def _routing(gate: Any, x: mx.array, k: int) -> tuple[mx.array, mx.array | None]:
+    """(experts, weights) the router picks for `x`; weights only for routers that return them
+    (DeepSeek/GLM style). Plain linear routers give logits: their top-k, without weights."""
+    out = gate(x)
+    if isinstance(out, tuple):
+        return out[0], out[1]
+    return mx.argpartition(-out, kth=k - 1, axis=-1)[..., :k], None
 
 
 def build_moe_model(path: str, cache: ExpertCache, progress: Any = None) -> nn.Module:
@@ -198,6 +225,9 @@ def build_moe_model(path: str, cache: ExpertCache, progress: Any = None) -> nn.M
     for (_, _, switch), (next_idx, next_block, _) in zip(switches, switches[1:], strict=False):
         if hasattr(next_block, "gate"):
             switch._next = (next_idx, next_block)
+    for _, block, switch in switches:
+        if hasattr(block, "gate"):
+            switch._gate = block.gate
 
     # Everything still lazy now is the resident part: materialise it with progress.
     params = [v for _, v in flat_params(model)]

@@ -32,6 +32,40 @@ MODE_KV_BITS: dict[Mode, int | None] = {
 }
 
 
+class Thinking(StrEnum):
+    """How long a reasoning model thinks before it answers."""
+
+    AUTO = "auto"  # off when the model runs via Drift (a few tokens/s), short otherwise
+    OFF = "off"
+    LOW = "low"
+    HIGH = "high"
+    MAX = "max"  # the model's own default
+
+
+# Request vocabularies: OpenAI `reasoning_effort`, Ollama `think` (bool or level).
+_THINKING_ALIASES = {
+    "none": Thinking.OFF,
+    "minimal": Thinking.OFF,
+    "false": Thinking.OFF,
+    "medium": Thinking.HIGH,
+    "xhigh": Thinking.MAX,
+    "true": Thinking.MAX,  # "think: true" asks for the model's normal reasoning
+}
+
+
+def parse_thinking(value: str | bool | None) -> Thinking | None:
+    """A request's thinking level; None when the request does not set one."""
+    if value is None:
+        return None
+    key = str(value).lower()
+    if key in _THINKING_ALIASES:
+        return _THINKING_ALIASES[key]
+    try:
+        return Thinking(key)
+    except ValueError:
+        return None
+
+
 def auto_os_reserve_gb(ram_bytes: int) -> float:
     """Memory kept free for macOS and other apps: a quarter of RAM, between 4 and 16 GB.
 
@@ -52,6 +86,9 @@ class Settings(BaseModel):
     prefill_step_size: int = Field(2048, ge=128, le=16384)
     prompt_cache_entries: int = Field(3, ge=0, le=16)
     prefetch_experts: bool = True  # Drift-MoE: speculative prefetch of the next layer's experts
+    # Drift-MoE: skip light experts that are not in RAM (faster, slightly less exact).
+    turbo: bool = False
+    thinking: Thinking = Thinking.AUTO
 
 
 @dataclass

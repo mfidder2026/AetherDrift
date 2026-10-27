@@ -19,7 +19,7 @@ from typing import Any
 
 import mlx.core as mx
 
-from ..config import EngineConfig
+from ..config import EngineConfig, Thinking
 from ..memory.budget import Budget, estimate_fit, plan
 from ..mlx_params import flat_params
 from ..models.registry import LocalModel, Registry
@@ -38,6 +38,8 @@ PREFETCH_DEPTH = 2
 # temporaries, nothing more, so memory stays within the budget.
 DRIFT_CACHE_BASE = 256 * 1024**2
 MIN_PROMPT_REUSE = 32  # tokens
+# KV room reserved up front for the reply; long replies reserve more as they grow.
+REPLY_RESERVE_TOKENS = 4096
 MEMORY_WAIT_S = 60.0  # e.g. a previous engine process still releasing ~100 GB
 _ids = itertools.count(1)
 
@@ -46,12 +48,13 @@ _ids = itertools.count(1)
 class GenerateRequest:
     messages: list[dict[str, Any]] | None = None
     prompt: str | None = None
-    max_tokens: int = 2048
+    max_tokens: int | None = None  # None: until the context is full
     temperature: float = 0.7
     top_p: float = 1.0
     stop: list[str] = field(default_factory=list)
     seed: int | None = None
     model: str | None = None
+    thinking: Thinking | None = None  # None: the engine setting
 
 
 @dataclass
@@ -388,7 +391,7 @@ class Worker(threading.Thread):
         return model, tokenizer, drift, backend, drift.resident_bytes
 
     def _load_drift_moe(self, info: LocalModel, budget: Budget) -> tuple[Any, ...]:
-        from ..drift.experts import ExpertCache, choose_slots, plan_moe
+        from ..drift.experts import TURBO_SKIP_SHARE, ExpertCache, choose_slots, plan_moe
         from ..drift.io_backend import PreadBackend
         from ..drift.model import build_moe_model
 
@@ -411,6 +414,7 @@ class Worker(threading.Thread):
         backend.on_read = self.stats.record_read
         cache = ExpertCache(plan, slots, backend, self.events, self.stats)
         cache.prefetch_enabled = lambda: self.config.settings.prefetch_experts
+        cache.skip_share = lambda: TURBO_SKIP_SHARE if self.config.settings.turbo else 0.0
         try:
             model = build_moe_model(info.path, cache, lambda f: self._progress(info.id, f, 0))
             tokenizer = _tokenizer(info.path)
@@ -443,14 +447,46 @@ class Worker(threading.Thread):
             "kv_bits": b.kv_bits,
         }
 
-    def _tokenize(self, req: GenerateRequest) -> list[int]:
+    def _thinking(self, req: GenerateRequest) -> Thinking:
+        assert self.loaded is not None
+        level = req.thinking or self.config.settings.thinking
+        if level == Thinking.AUTO:
+            # Drift runs at a few tokens per second: minutes of reasoning before every
+            # answer makes a chat unusable.
+            return Thinking.OFF if self.loaded.mode != "resident" else Thinking.LOW
+        return level
+
+    def _turbo(self, lm: LoadedModel) -> bool:
+        return lm.mode == "drift-moe" and self.config.settings.turbo
+
+    def _tokenize(self, req: GenerateRequest, thinking: Thinking) -> list[int]:
         assert self.loaded is not None
         tok = self.loaded.tokenizer
         if req.messages is not None:
             if getattr(tok, "chat_template", None):
-                return list(
-                    tok.apply_chat_template(req.messages, add_generation_prompt=True, tokenize=True)
-                )
+                kwargs: dict[str, Any] = {"enable_thinking": thinking != Thinking.OFF}
+                if thinking != Thinking.MAX and "reasoning_effort" in str(tok.chat_template):
+                    # GLM 5 knows low/high (anything else means max); gpt-oss low/medium/high.
+                    kwargs["reasoning_effort"] = "high" if thinking == Thinking.HIGH else "low"
+                try:
+                    tokens = list(
+                        tok.apply_chat_template(
+                            req.messages, add_generation_prompt=True, tokenize=True, **kwargs
+                        )
+                    )
+                except TypeError:
+                    # mlx-lm's Python renderers (e.g. DeepSeek V3.2) take no extra options.
+                    kwargs.pop("reasoning_effort", None)
+                    tokens = list(
+                        tok.apply_chat_template(
+                            req.messages, add_generation_prompt=True, tokenize=True, **kwargs
+                        )
+                    )
+                if thinking == Thinking.OFF and _opens_thinking(tok, tokens):
+                    # Templates that always open a reasoning block (GLM 5): close it so the
+                    # model answers right away, as the template renders turns without one.
+                    tokens += list(tok.think_end_tokens)
+                return tokens
             text = "\n".join(f"{m['role']}: {m.get('content') or ''}" for m in req.messages)
             return list(tok.encode(text + "\nassistant:"))
         return list(tok.encode(req.prompt or ""))
@@ -476,7 +512,8 @@ class Worker(threading.Thread):
                     status=409,
                 )
             lm = self.loaded
-            prompt = self._tokenize(job.request)
+            thinking = self._thinking(job.request)
+            prompt = self._tokenize(job.request, thinking)
             ctx_max = lm.budget.context_tokens
             if len(prompt) >= ctx_max:
                 raise EngineError(
@@ -485,11 +522,15 @@ class Worker(threading.Thread):
                     hint="Start een nieuw gesprek of kies modus Lange context.",
                     status=400,
                 )
-            max_tokens = min(job.request.max_tokens, ctx_max - len(prompt))
+            room = ctx_max - len(prompt)
+            max_tokens = min(job.request.max_tokens or room, room)
 
             use_cache = self.config.settings.prompt_cache_entries > 0
+            # KV computed with Turbo is approximate: never reuse it for exact answers.
+            turbo = self._turbo(lm)
+            cache_key = f"{lm.info.path}#turbo" if turbo else lm.info.path
             cache, rest = (
-                self._prompt_cache.fetch_nearest_cache(lm.info.path, prompt)
+                self._prompt_cache.fetch_nearest_cache(cache_key, prompt)
                 if use_cache
                 else (None, prompt)
             )
@@ -505,10 +546,17 @@ class Worker(threading.Thread):
                     cache, rest = make_prompt_cache(lm.model), prompt
             cached = len(prompt) - len(rest)
             # The working cache is a copy; stored entries + this request together must fit
-            # the KV budget, so make room before generating.
+            # the KV budget, so make room before generating (and again as the reply grows).
             per_token = lm.budget.kv_bytes // max(1, lm.budget.context_tokens)
-            working = per_token * (len(prompt) + max_tokens)
-            self._prompt_cache.trim_to(n_bytes=max(0, lm.budget.kv_bytes - working))
+
+            def make_room(tokens: int) -> int:
+                reserved = min(len(prompt) + max_tokens, tokens + REPLY_RESERVE_TOKENS)
+                self._prompt_cache.trim_to(
+                    n_bytes=max(0, lm.budget.kv_bytes - per_token * reserved)
+                )
+                return reserved
+
+            reserved = make_room(len(prompt))
 
             if job.request.seed is not None:
                 mx.random.seed(job.request.seed)
@@ -516,7 +564,11 @@ class Worker(threading.Thread):
 
             self.stats.update("generation", active=True, ttft_ms=None, context_tokens=len(prompt))
             self.events.publish(
-                "generation_started", id=job.id, prompt_tokens=len(prompt), cached_tokens=cached
+                "generation_started",
+                id=job.id,
+                prompt_tokens=len(prompt),
+                cached_tokens=cached,
+                thinking=thinking.value,
             )
             key = list(prompt)
             # The template may open <think> itself (GLM); clients then still see a whole block.
@@ -541,6 +593,8 @@ class Worker(threading.Thread):
                 last = resp
                 n += 1
                 key.append(resp.token)
+                if len(key) >= reserved:
+                    reserved = make_room(len(key))
                 if first_token_at is None:
                     first_token_at = time.perf_counter()
                     self.stats.update(
@@ -575,8 +629,8 @@ class Worker(threading.Thread):
             if finish != "stop" and len(text) > emitted:
                 job.emit({"type": "token", "text": text[emitted:]})
 
-            if use_cache:
-                self._prompt_cache.insert_cache(lm.info.path, key, cache)
+            if use_cache and self._turbo(lm) == turbo:  # not switched halfway
+                self._prompt_cache.insert_cache(cache_key, key, cache)
             kv_now = sum(c.nbytes for c in cache)
             self.stats.update("memory", kv_bytes=kv_now)
             decode_tps = round(last.generation_tps, 2) if last else None
@@ -600,6 +654,7 @@ class Worker(threading.Thread):
             self._current = None
             self._jobs.pop(job.id, None)
             self.stats.update("generation", active=False)
+            self.stats.update("drift", current_layer=None)  # the next prompt starts at layer 1
             self._publish_queue_depth()
 
 

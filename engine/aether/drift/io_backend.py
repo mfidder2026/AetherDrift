@@ -12,7 +12,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,24 +38,31 @@ def _staging(nbytes: int) -> np.ndarray:
 
 
 def _all_of(parts: list[Future[Any]]) -> Future[None]:
+    """Resolves once every part has finished, with the first error if any.
+
+    It never resolves early on an error: other parts may still be writing into the same
+    buffer, which must not be reused before they are done.
+    """
     done: Future[None] = Future()
     if not parts:
         done.set_result(None)
         return done
     remaining = [len(parts)]
+    errors: list[BaseException] = []
     lock = threading.Lock()
 
     def finished(f: Future[Any]) -> None:
-        if done.done():
-            return
-        if (exc := f.exception()) is not None:
-            done.set_exception(exc)
-            return
+        exc = CancelledError() if f.cancelled() else f.exception()
         with lock:
+            if exc is not None:
+                errors.append(exc)
             remaining[0] -= 1
             last = remaining[0] == 0
         if last:
-            done.set_result(None)
+            if errors:
+                done.set_exception(errors[0])
+            else:
+                done.set_result(None)
 
     for p in parts:
         p.add_done_callback(finished)
@@ -87,10 +94,17 @@ class PreadBackend:
 
     os.preadv releases the GIL, so a plain thread pool gives real I/O parallelism.
     Large units are split into chunks so a single unit still uses the full queue depth.
+    Background reads (speculative prefetch) have their own threads, so a read that is needed
+    right now never waits in line behind a guess.
     """
 
-    def __init__(self, threads: int = 16, chunk_bytes: int = DEFAULT_CHUNK) -> None:
+    def __init__(
+        self, threads: int = 16, chunk_bytes: int = DEFAULT_CHUNK, background_threads: int = 8
+    ) -> None:
         self._pool = ThreadPoolExecutor(max_workers=threads, thread_name_prefix="aether-io")
+        self._bg_pool = ThreadPoolExecutor(
+            max_workers=background_threads, thread_name_prefix="aether-io-bg"
+        )
         self._chunk = chunk_bytes
         self._fds: dict[str, int] = {}
         self._fd_lock = threading.Lock()
@@ -142,26 +156,19 @@ class PreadBackend:
             for pos in range(0, req.nbytes, self._chunk)
         ]
         result: Future[bytearray] = Future()
-        remaining = [len(parts)]
-        lock = threading.Lock()
 
-        def _done(f: Future[int]) -> None:
-            if result.done():
-                return
-            if (exc := f.exception()) is not None:
+        def _done(group: Future[None]) -> None:
+            if (exc := group.exception()) is not None:
                 result.set_exception(exc)
-                return
-            with lock:
-                remaining[0] -= 1
-                finished = remaining[0] == 0
-            if finished:
+            else:
                 result.set_result(out)  # type: ignore[arg-type]
 
-        for p in parts:
-            p.add_done_callback(_done)
+        _all_of(parts).add_done_callback(_done)
         return result
 
-    def submit_unaligned(self, req: ReadRequest, dest: memoryview) -> Future[None]:
+    def submit_unaligned(
+        self, req: ReadRequest, dest: memoryview, background: bool = False
+    ) -> Future[None]:
         """Read a region that starts at an unaligned file offset without using the page cache.
 
         F_NOCACHE only applies to 4 KB-aligned I/O (ADR-004). Each chunk is read aligned into
@@ -170,8 +177,9 @@ class PreadBackend:
         if len(dest) < req.nbytes:
             raise ValueError("buffer smaller than request")
         fd = self._fd(req.path)
+        pool = self._bg_pool if background else self._pool
         parts = [
-            self._pool.submit(self._read_staged, fd, req.offset + pos, dest[pos : pos + n])
+            pool.submit(self._read_staged, fd, req.offset + pos, dest[pos : pos + n])
             for pos in range(0, req.nbytes, self._chunk)
             if (n := min(self._chunk, req.nbytes - pos))
         ]
@@ -195,6 +203,7 @@ class PreadBackend:
 
     def close(self) -> None:
         self._pool.shutdown(wait=True)
+        self._bg_pool.shutdown(wait=True)
         with self._fd_lock:
             for fd in self._fds.values():
                 os.close(fd)

@@ -51,6 +51,16 @@ def test_long_context_keeps_half_for_weights_and_quantizes_kv() -> None:
     assert b.weights_bytes >= b.usable_bytes * 0.5 - 1
 
 
+def test_long_context_does_not_starve_a_drift_model() -> None:
+    """GLM 5.3 in long-context mode used to reserve 44 GB of KV and keep 31 instead of 58
+    expert slots per layer: ~40 % more SSD reads per token."""
+    glm = ModelShape(int(418.3e9), int(10.7e9), int(12.7e9), 78 * 576 * 2, 1 << 20)
+    long = plan(glm, RAM, WORKING_SET, Settings(mode=Mode.LONG_CONTEXT))
+    balanced = plan(glm, RAM, WORKING_SET, Settings())
+    assert long.context_tokens == 128 * 1024 > balanced.context_tokens
+    assert long.kv_bytes < 6 * GB and long.weights_bytes > balanced.weights_bytes - 4 * GB
+
+
 def test_fit_modes_for_glm53() -> None:
     # Numbers from bench/reports/M0.md
     glm = ModelShape(int(418.3e9), int(10.7e9), int(12.7e9), 78 * 576 * 2, 1 << 20)

@@ -51,6 +51,7 @@ def parse_args(argv: list[str] | None = None) -> EngineConfig:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--data-dir", type=Path)
+    p.add_argument("--log-dir", type=Path, help="default: ~/Library/Logs/AetherDrift")
     p.add_argument("--hf-cache-dir", type=Path)
     p.add_argument("--parent-pid", type=int)
     p.add_argument("--api-key-stdin", action="store_true", help="read the API key from stdin")
@@ -65,6 +66,8 @@ def parse_args(argv: list[str] | None = None) -> EngineConfig:
     cfg = EngineConfig(host=a.host, port=a.port, parent_pid=a.parent_pid, preload_model=a.model)
     if a.data_dir:
         cfg.data_dir = a.data_dir
+    if a.log_dir:
+        cfg.log_dir = a.log_dir
     cfg.hf_cache_dir = a.hf_cache_dir
     cfg.settings = Settings(
         mode=Mode(a.mode),

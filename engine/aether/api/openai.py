@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..config import parse_thinking
 from ..runtime.errors import EngineError
 from ..runtime.worker import GenerateRequest
 from .sse import sse_data, sse_response
@@ -40,6 +41,8 @@ class ChatCompletionRequest(BaseModel):
     max_completion_tokens: int | None = Field(None, ge=1)
     stop: str | list[str] | None = None
     seed: int | None = None
+    # none/minimal/low/medium/high (OpenAI) or off/low/high/max; unknown values are ignored.
+    reasoning_effort: str | None = None
 
 
 def _engine(request: Request) -> EngineState:
@@ -120,11 +123,12 @@ async def chat_completions(body: ChatCompletionRequest, request: Request) -> Any
             {**m.model_dump(exclude_none=True), "content": _text_content(m.content)}
             for m in body.messages
         ],
-        max_tokens=body.max_completion_tokens or body.max_tokens or 2048,
+        max_tokens=body.max_completion_tokens or body.max_tokens,
         temperature=0.7 if body.temperature is None else body.temperature,
         top_p=body.top_p or 1.0,
         stop=stops,
         seed=body.seed,
+        thinking=parse_thinking(body.reasoning_effort),
     )
     job, first, events = await engine.begin(gen, request)
     created = int(time.time())

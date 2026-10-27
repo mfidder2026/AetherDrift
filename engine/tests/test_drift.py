@@ -152,6 +152,8 @@ def test_drift_engine_matches_resident(tmp_path: Path) -> None:
             "0",
             "--data-dir",
             str(tmp_path),
+            "--log-dir",
+            str(tmp_path / "logs"),
             "--weights-budget",
             "0.15GB",
             "--model",
@@ -207,6 +209,8 @@ def test_too_small_budget_is_a_clear_error(tmp_path: Path, budget: str) -> None:
             "0",
             "--data-dir",
             str(tmp_path),
+            "--log-dir",
+            str(tmp_path / "logs"),
             "--weights-budget",
             budget,
         ],
@@ -239,6 +243,77 @@ def test_unaligned_read_is_exact_including_file_end(tmp_path: Path) -> None:
         dest = np.zeros(n, dtype=np.uint8)
         backend.submit_unaligned(ReadRequest(str(f), offset, n), memoryview(dest)).result()
         assert np.array_equal(dest, data[offset : offset + n]), (offset, n)
+    backend.close()
+
+
+def test_read_group_waits_for_every_part_before_failing() -> None:
+    """A failed or cancelled part must not release a buffer that other parts still fill."""
+    from concurrent.futures import CancelledError, Future
+
+    from aether.drift.io_backend import _all_of
+
+    a: Future[None] = Future()
+    b: Future[None] = Future()
+    group = _all_of([a, b])
+    a.set_exception(OSError(5, "Input/output error"))
+    assert not group.done()
+    b.set_result(None)
+    with pytest.raises(OSError):
+        group.result(timeout=1)
+
+    c: Future[None] = Future()
+    d: Future[None] = Future()
+    group = _all_of([c, d])
+    c.cancel()
+    d.set_result(None)
+    with pytest.raises(CancelledError):
+        group.result(timeout=1)
+
+
+def test_layer_read_waits_for_every_span_before_failing(tmp_path: Path) -> None:
+    """Drift-Dense: a failed span must not free the buffer while another span writes."""
+    from concurrent.futures import Future
+
+    from aether.drift.residency import read_unit
+
+    plan = plan_dense(build_index(_write_model(tmp_path)))
+    unit = next(u for u in plan.units if len(u.spans) >= 2)
+    slow: Future[None] = Future()
+    calls = iter([0, 1])
+
+    class Backend:
+        def submit(self, req, buf):  # noqa: ANN001, ANN202
+            if next(calls, 1) == 0:
+                f: Future[None] = Future()
+                f.set_exception(OSError(5, "Input/output error"))
+                return f
+            return slow
+
+    group = read_unit(
+        Backend(), unit, type("Buf", (), {"host": np.zeros(unit.buffer_bytes, np.uint8)})()
+    )  # type: ignore[arg-type]
+    assert not group.done()
+    slow.set_result(None)
+    with pytest.raises(OSError):
+        group.result(timeout=1)
+
+
+def test_background_reads_use_their_own_threads(tmp_path: Path) -> None:
+    import threading
+
+    f = tmp_path / "blob.bin"
+    f.write_bytes(bytes(range(256)) * 64)
+    backend = PreadBackend(threads=1, background_threads=1)
+    from aether.drift.io_backend import ReadRequest
+
+    names: list[str] = []
+    backend.on_read = lambda n, s: names.append(threading.current_thread().name)
+    dest = np.zeros(100, dtype=np.uint8)
+    backend.submit_unaligned(
+        ReadRequest(str(f), 3, 100), memoryview(dest), background=True
+    ).result()
+    backend.submit_unaligned(ReadRequest(str(f), 3, 100), memoryview(dest)).result()
+    assert names[0].startswith("aether-io-bg") and not names[1].startswith("aether-io-bg")
     backend.close()
 
 

@@ -13,7 +13,7 @@ import pytest
 
 from aether.api.app import create_app
 from aether.api.state import EngineState
-from aether.config import EngineConfig, Settings
+from aether.config import EngineConfig, Settings, Thinking
 from aether.models.registry import Registry
 from aether.system import SystemInfo
 from aether.telemetry.events import EventBus
@@ -32,10 +32,12 @@ class FakeWorker:
         self.error = error
         self.loaded = FakeLoaded()
         self.cancelled: list[str] = []
+        self.requests: list[Any] = []
 
     def submit(self, kind: str, payload: Any = None) -> Future[Any]:
         fut: Future[Any] = Future()
         if kind == "generate":
+            self.requests.append(payload.request)
             if self.error:
                 payload.emit({"type": "error", **self.error})
             else:
@@ -388,3 +390,22 @@ def test_ollama_accepts_json_without_content_type(tmp_path: Path) -> None:
 
     r = run(go())
     assert r.status_code == 200 and r.json()["message"]["content"] == "hoi"
+
+
+def test_thinking_and_length_reach_the_worker(tmp_path: Path) -> None:
+    worker = FakeWorker(["a"])
+
+    async def go() -> None:
+        async with client(make_engine(tmp_path, worker)) as c:
+            await c.post("/v1/chat/completions", json={**CHAT, "reasoning_effort": "none"})
+            await c.post("/v1/chat/completions", json={**CHAT, "reasoning_effort": "loud"})
+            await c.post("/v1/chat/completions", json={**CHAT, "max_tokens": 7})
+            body = {**CHAT, "stream": False, "think": True, "options": {"num_predict": -1}}
+            await c.post("/api/chat", content=json.dumps(body))
+
+    run(go())
+    off, unknown, limited, ollama = worker.requests
+    assert off.thinking == Thinking.OFF and off.max_tokens is None  # until the context is full
+    assert unknown.thinking is None  # the engine setting decides
+    assert limited.max_tokens == 7
+    assert ollama.thinking == Thinking.MAX and ollama.max_tokens is None

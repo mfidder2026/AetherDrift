@@ -178,6 +178,8 @@ def test_failed_load_reports_error_and_keeps_engine_usable(tmp_path) -> None:
             "0",
             "--data-dir",
             str(tmp_path / "d"),
+            "--log-dir",
+            str(tmp_path / "d" / "logs"),
             "--model",
             str(bad),
             "--parent-pid",

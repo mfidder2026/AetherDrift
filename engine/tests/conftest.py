@@ -67,6 +67,8 @@ def engine_proc(tmp_path_factory: pytest.TempPathFactory) -> Iterator[RunningEng
             "0",
             "--data-dir",
             str(data),
+            "--log-dir",
+            str(data / "logs"),
             "--model",
             SMALL_MODEL,
             "--parent-pid",

@@ -102,11 +102,13 @@ const T = nl ? {
   empty: "Chat met het model op je Mac.", noKey: "Geen API-sleutel. Scan de QR-code in AetherDrift (Verbind een apparaat).",
   badKey: "De API-sleutel klopt niet meer. Scan de QR-code opnieuw.", offline: "Kan de Mac niet bereiken. Staat delen aan en zit je op hetzelfde netwerk?",
   thinking: "Denkproces", noModel: "geen model geladen", queued: "In de wachtrij…", stopped: "gestopt",
+  cut: "afgebroken (maximale lengte)",
 } : {
   newChat: "New", send: "Send", stop: "Stop", placeholder: "Ask anything…",
   empty: "Chat with the model on your Mac.", noKey: "No API key. Scan the QR code in AetherDrift (Connect a device).",
   badKey: "The API key is no longer valid. Scan the QR code again.", offline: "Cannot reach the Mac. Is sharing on and are you on the same network?",
   thinking: "Reasoning", noModel: "no model loaded", queued: "Queued…", stopped: "stopped",
+  cut: "cut off (maximum length)",
 };
 document.documentElement.lang = nl ? "nl" : "en";
 
@@ -292,6 +294,7 @@ async function send(text) {
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    let cut = false;
     reply.meta = "";
     for (;;) {
       const { value, done } = await reader.read();
@@ -309,12 +312,14 @@ async function send(text) {
           if (chunk.error) throw new Error(chunk.error.message);
           const choice = chunk.choices && chunk.choices[0];
           if (choice && choice.delta && choice.delta.content) reply.content += choice.delta.content;
+          if (choice && choice.finish_reason === "length") cut = true;
           const tps = chunk.aether && chunk.aether.timings && chunk.aether.timings.decode_tps;
           if (tps) reply.meta = `${tps.toLocaleString(nl ? "nl-NL" : "en-US", { maximumFractionDigits: 1 })} tok/s`;
         }
       }
       paint();
     }
+    if (cut) reply.meta = (reply.meta ? reply.meta + " · " : "") + T.cut;
   } catch (e) {
     if (e.name === "AbortError") reply.meta = T.stopped;
     else reply.error = e instanceof TypeError ? T.offline : e.message;

@@ -14,6 +14,9 @@ from ..config import GB, MODE_CONTEXT, MODE_KV_BITS, Settings, auto_os_reserve_g
 ASSUMED_MEMORY_BANDWIDTH = 250e9
 ASSUMED_MOE_HIT_RATE = 0.5
 MIN_LONG_CONTEXT_WEIGHT_SHARE = 0.5
+# Long context for a model that streams via Drift: every GB of KV is a GB less of weights in
+# RAM, i.e. speed, and reading in a prompt this long already takes about an hour.
+LONG_CONTEXT_DRIFT_TOKENS = 128 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +90,8 @@ def plan(shape: ModelShape, ram: int, working_set: int, settings: Settings) -> B
     if target is None:  # long context: as much as fits while weights keep ≥ 50 %
         kv_room = max(usable - shape.total_bytes, int(usable * (1 - MIN_LONG_CONTEXT_WEIGHT_SHARE)))
         target = kv_room // max(1, per_token)
+        if shape.total_bytes > usable:
+            target = min(target, LONG_CONTEXT_DRIFT_TOKENS)
     context = max(1024, min(target, shape.max_context or target))
     kv = context * per_token
     weights = usable - kv

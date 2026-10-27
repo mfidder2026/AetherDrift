@@ -24,7 +24,7 @@ import numpy as np
 
 from ..telemetry.events import EventBus
 from ..telemetry.stats import Stats
-from .io_backend import PreadBackend, ReadRequest
+from .io_backend import PreadBackend, ReadRequest, _all_of
 from .units import SAFETENSORS_DTYPES, DensePlan, LayerUnit
 
 HIT_WINDOW = 512
@@ -50,33 +50,21 @@ class UnitBuffer:
 
 
 def read_unit(backend: PreadBackend, unit: LayerUnit, buf: UnitBuffer) -> Future[None]:
-    """Submit the unit's page-aligned span reads; resolves when all of them are in."""
-    done: Future[None] = Future()
-    if not unit.spans:
-        done.set_result(None)
-        return done
-    remaining = [len(unit.spans)]
-    lock = threading.Lock()
+    """Submit the unit's page-aligned span reads; resolves when all of them are in.
+
+    On an error it still waits for every span: the buffer must not be reused while one of
+    them is writing into it.
+    """
     view = memoryview(buf.host)
-
-    def finished(f: Future[Any]) -> None:
-        if done.done():
-            return
-        if (exc := f.exception()) is not None:
-            done.set_exception(exc)
-            return
-        with lock:
-            remaining[0] -= 1
-            last = remaining[0] == 0
-        if last:
-            done.set_result(None)
-
-    for s in unit.spans:
-        target = view[s.buffer_offset : s.buffer_offset + s.nbytes]
-        backend.submit(ReadRequest(s.file, s.file_offset, s.nbytes), target).add_done_callback(
-            finished
-        )
-    return done
+    return _all_of(
+        [
+            backend.submit(
+                ReadRequest(s.file, s.file_offset, s.nbytes),
+                view[s.buffer_offset : s.buffer_offset + s.nbytes],
+            )
+            for s in unit.spans
+        ]
+    )
 
 
 @dataclass

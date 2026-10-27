@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .. import __version__
+from ..config import parse_thinking
 from ..runtime.errors import EngineError
 from ..runtime.worker import GenerateRequest
 from .openai import ensure_model
@@ -47,6 +48,7 @@ class ChatBody(BaseModel):
     messages: list[OllamaMessage] = Field(min_length=1)
     stream: bool = True
     options: Options | None = None
+    think: bool | str | None = None
 
 
 class GenerateBody(BaseModel):
@@ -57,6 +59,7 @@ class GenerateBody(BaseModel):
     raw: bool = False
     stream: bool = True
     options: Options | None = None
+    think: bool | str | None = None
 
 
 def _engine(request: Request) -> EngineState:
@@ -67,15 +70,16 @@ def _now() -> str:
     return dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z")
 
 
-def _request(opts: Options | None, **kw: Any) -> GenerateRequest:
+def _request(opts: Options | None, think: bool | str | None, **kw: Any) -> GenerateRequest:
     o = opts or Options()
-    max_tokens = o.num_predict if o.num_predict and o.num_predict > 0 else 2048
     return GenerateRequest(
-        max_tokens=max_tokens,
+        # Ollama: -1 (or nothing) generates until the context is full.
+        max_tokens=o.num_predict if o.num_predict and o.num_predict > 0 else None,
         temperature=0.8 if o.temperature is None else o.temperature,  # Ollama's default
         top_p=o.top_p or 1.0,
         stop=list(o.stop or []),
         seed=o.seed,
+        thinking=parse_thinking(think),
         **kw,
     )
 
@@ -169,7 +173,7 @@ async def _body[BodyT: BaseModel](request: Request, model: type[BodyT]) -> BodyT
 @router.post("/api/chat", response_model=None)
 async def chat(request: Request) -> Any:
     body = await _body(request, ChatBody)
-    gen = _request(body.options, messages=[m.model_dump() for m in body.messages])
+    gen = _request(body.options, body.think, messages=[m.model_dump() for m in body.messages])
     return await _respond(
         request,
         gen,
@@ -186,11 +190,11 @@ async def generate(request: Request) -> Any:
         model_id = await ensure_model(_engine(request), body.model)
         return {"model": model_id, "created_at": _now(), "response": "", "done": True}
     if body.raw:
-        gen = _request(body.options, prompt=body.prompt)
+        gen = _request(body.options, body.think, prompt=body.prompt)
     else:
         messages = [{"role": "system", "content": body.system}] if body.system else []
         messages.append({"role": "user", "content": body.prompt})
-        gen = _request(body.options, messages=messages)
+        gen = _request(body.options, body.think, messages=messages)
     return await _respond(request, gen, body.model, lambda text: {"response": text}, body.stream)
 
 
