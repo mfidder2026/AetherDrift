@@ -117,7 +117,7 @@ Het Xcode-project wordt gegenereerd uit `app/project.yml` (XcodeGen). De bouwsta
 | `system.py` | Chip, RAM, geheugendruk (sysctl), snelle SSD-test |
 | `api/` | FastAPI-app; `auth.py` is pure ASGI-middleware (loopback vrij maar geen vreemde Host/Origin, netwerk alleen chat-API's met sleutel; ADR-006), `openai.py` (chat + completions), `ollama.py`, `aether.py`, `sse.py`, webchat op `/` |
 | `web/index.html` | Webchat voor telefoon en browser: één bestand, geen build-stap, sleutel uit het URL-fragment |
-| `runtime/worker.py` | Generatorthread: enige eigenaar van MLX. Laden met voortgang, prompt-cache (mlx-lm `LRUPromptCache`, prefix-matching), stopsequenties, annuleren |
+| `runtime/worker.py` | Generatorthread: enige eigenaar van MLX. Laden met voortgang, prompt-cache (mlx-lm `LRUPromptCache`, prefix-matching), stopsequenties, annuleren, nadenk-niveau naar de chat-template |
 | `memory/budget.py` | Budget en fit-inschatting (resident / drift-dense / drift-moe / too_large) |
 | `memory/guard.py` | Geheugendruk en swapgroei → events; bij kritiek wordt de generatie gestopt |
 | `models/registry.py` | Modellen vinden (eigen map + HF-cache), catalogus, hervatbare download |
@@ -126,7 +126,7 @@ Het Xcode-project wordt gegenereerd uit `app/project.yml` (XcodeGen). De bouwsta
 | `drift/units.py` | Lagen → units met page-aligned leesregio's (ADR-004); keuze van het aantal vaste lagen |
 | `drift/residency.py` | Vaste lagen + ring van slots, prefetch, eviction, hitrate, verkleinen bij geheugendruk |
 | `drift/model.py` | Omwikkelt de decoderlagen van een mlx-lm-model: gewichten ophalen → rekenen → eval → vrijgeven. `DriftSwitch` vervangt de expert-laag van MoE-blokken (ADR-005) |
-| `drift/experts.py` | Expert-slots per laag, LFU met veroudering, speculatieve prefetch, volledige buffer voor prefill (ADR-005) |
+| `drift/experts.py` | Expert-slots per laag, LFU met korte veroudering (16 tokens), speculatieve prefetch met eigen I/O-threads, volledige buffer voor prefill, Turbo (ADR-005) |
 | `telemetry/` | Eventbus (ringbuffer, throttling naar samenvattingen) en statistieken-snapshot |
 
 ## Afwijkingen van start-prompt-v2
@@ -142,6 +142,10 @@ Het Xcode-project wordt gegenereerd uit `app/project.yml` (XcodeGen). De bouwsta
 9. De OS-reserve is standaard automatisch: een kwart van het RAM, tussen 4 en 16 GB (`auto_os_reserve_gb`). Een vaste 16 GB liet op een Mac met 16 GB niets over.
 10. De QR-code gebruikt het IP-adres in plaats van `<naam>.local` (ADR-006).
 11. Beheer-endpoints zijn via het netwerk niet bereikbaar, en loopback weigert vreemde `Host`/`Origin` (ADR-006).
+12. **Nadenken** is een engine-instelling (automatisch, uit, kort, grondig, maximaal) en per verzoek in te stellen (`reasoning_effort`, Ollama `think`). Automatisch zet het uit voor Drift-modellen en houdt het kort voor modellen in het RAM. GLM 5.3 zet zonder instructie "Reasoning Effort: Max" in de prompt; via Drift betekende dat een half uur denken zonder antwoord.
+13. Zonder `max_tokens` loopt een antwoord door tot de context vol is (was 2048), net als bij OpenAI en Ollama.
+14. **Lange context bij Drift-modellen** is begrensd op 128K tokens. Eerst ging de helft van het geheugen naar de KV-cache. Voor GLM 5.3 was dat 44 GB, en bleven er 31 in plaats van 58 experts per laag in het RAM: ~40 % meer SSD-reads per token. Een prompt van 128K tokens inlezen via Drift duurt al bijna een uur.
+15. **Turbo** (instelling `turbo`, standaard uit): Drift-MoE slaat gekozen experts over die niet in het RAM staan en minder dan 12 % van het routergewicht van hun token dragen. De rest van dat token krijgt het volle gewicht. Bij GLM 5.3 komt het eerste token zo 2× sneller en is decode 2,3× sneller, met perplexiteit +6 % (`bench/reports/2026-10-27-GLM-speed.md`). Alleen voor routers die gewichten teruggeven (DeepSeek/GLM-stijl); bij andere modellen doet de schakelaar niets.
 
 ## Onafhankelijke review (2026-10-26)
 
@@ -167,7 +171,7 @@ Een aparte agent zonder voorkennis heeft de code doorgelopen en 15 bevindingen g
 ## Bekende beperkingen (M1–M6)
 
 - Drift-MoE kan zijn expert-slots niet verkleinen bij geheugendruk; de bewaker stopt bij "kritiek" alleen de generatie.
-- GLM 5.3 haalt ~1 tok/s; de SSD is de grens (ADR-005). Het eerste antwoord duurt 17–28 s.
+- GLM 5.3 haalt op de M3 Max 128 GB 1,2–1,4 tok/s, en het eerste token komt na 11–30 s. De SSD is de grens: met 58 van 256 experts per laag in het RAM zijn ~4 GB reads per token onvermijdelijk, dus hooguit ~1,7 tok/s (`bench/reports/2026-10-27-GLM-speed.md`).
 
 - Eén model tegelijk en één generatie tegelijk (FIFO-wachtrij), zoals ontworpen.
 - Een wijziging van de modus geldt pas na het opnieuw laden van het model (`requires_reload: true`). De app herlaadt dan automatisch.
