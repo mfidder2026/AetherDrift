@@ -39,6 +39,8 @@ targets:
       path: AetherDrift/Resources/Info.plist
       properties:
         CFBundleDisplayName: AetherDrift
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: "© 2026 AetherDrift"
         LSMinimumSystemVersion: "14.0"
