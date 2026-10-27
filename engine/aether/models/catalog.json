@@ -1,0 +1,35 @@
+[
+  {
+    "repo": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+    "name": "Qwen 2.5 0.5B",
+    "role": "starter",
+    "description": "Klein en razendsnel. Ideaal om direct te beginnen.",
+    "size_bytes": 278000000,
+    "resident_bytes": 278000000,
+    "expert_bytes_per_token": 0,
+    "kv_bytes_per_token": 12288,
+    "max_context": 32768
+  },
+  {
+    "repo": "mlx-community/Qwen3-30B-A3B-4bit",
+    "name": "Qwen3 30B-A3B",
+    "role": "medium",
+    "description": "Sterk allround-model (MoE). Snel op elke Mac met 32 GB of meer.",
+    "size_bytes": 17200000000,
+    "resident_bytes": 1200000000,
+    "expert_bytes_per_token": 1000000000,
+    "kv_bytes_per_token": 98304,
+    "max_context": 40960
+  },
+  {
+    "repo": "mlx-community/GLM-5.3-4bit",
+    "name": "GLM 5.3",
+    "role": "reference",
+    "description": "Het grote referentiemodel (418 GB). Draait via de Drift Engine.",
+    "size_bytes": 418300000000,
+    "resident_bytes": 10700000000,
+    "expert_bytes_per_token": 12700000000,
+    "kv_bytes_per_token": 89856,
+    "max_context": 1048576
+  }
+]

@@ -5,7 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-models/
+# Downloaded model folders. Anchored: on macOS git matches case-insensitively, and a bare
+# models/ also hid app/AetherDrift/Features/Models and engine/aether/models.
+/models/
 bench/reports/*.json
 # Xcode
 app/**/xcuserdata/
