@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>AetherDrift</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --panel: #ffffff; --text: #16171a; --muted: #6b6f76; --line: #e3e4e8;
+    --accent: #3b5bdb; --accent-text: #ffffff; --user: #e8ecfb; --code: #f0f1f4; --danger: #c92a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111214; --panel: #1a1b1e; --text: #e9eaec; --muted: #9a9ea6; --line: #2b2d31;
+      --accent: #5c7cfa; --accent-text: #ffffff; --user: #232a40; --code: #24262b; --danger: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #model { color: var(--muted); font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 10px; padding: 6px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  main { flex: 1; overflow-y: auto; padding: 16px; -webkit-overflow-scrolling: touch; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .msg { margin: 0 0 16px; }
+  .msg.user .bubble {
+    background: var(--user); border-radius: 16px; padding: 8px 14px; margin-left: auto;
+    width: fit-content; max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .msg.assistant .bubble { overflow-wrap: anywhere; }
+  .bubble p { margin: 0 0 .7em; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble pre {
+    background: var(--code); border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+    font: 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .bubble code { font: 0.9em ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; }
+  .bubble pre code { background: none; padding: 0; }
+  .bubble ul, .bubble ol { padding-left: 1.4em; margin: 0 0 .7em; }
+  .bubble h1, .bubble h2, .bubble h3 { font-size: 1.05em; margin: .8em 0 .4em; }
+  details.think { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  details.think summary { cursor: pointer; }
+  details.think div { white-space: pre-wrap; border-left: 2px solid var(--line); padding-left: 10px; margin-top: 6px; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .error { color: var(--danger); }
+  .empty { color: var(--muted); text-align: center; margin-top: 20vh; }
+  form {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px);
+    border-top: 1px solid var(--line); background: var(--panel);
+  }
+  form .wrap { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; max-height: 40vh;
+    font-size: 16px; /* no zoom on iOS */
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .cursor::after { content: "▍"; animation: blink 1s steps(1) infinite; color: var(--muted); }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cursor::after { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>AetherDrift</h1>
+  <span id="model" aria-live="polite"></span>
+  <button id="new" type="button"></button>
+</header>
+<main id="log" aria-live="polite"><div class="wrap" id="messages"></div></main>
+<form id="form">
+  <div class="wrap">
+    <textarea id="input" rows="1" autocomplete="off"></textarea>
+    <button id="send" class="primary" type="submit"></button>
+  </div>
+</form>
+<script>
+"use strict";
+const nl = (navigator.language || "nl").toLowerCase().startsWith("nl");
+const T = nl ? {
+  newChat: "Nieuw", send: "Stuur", stop: "Stop", placeholder: "Stel een vraag…",
+  empty: "Chat met het model op je Mac.", noKey: "Geen API-sleutel. Scan de QR-code in AetherDrift (Verbind een apparaat).",
+  badKey: "De API-sleutel klopt niet meer. Scan de QR-code opnieuw.", offline: "Kan de Mac niet bereiken. Staat delen aan en zit je op hetzelfde netwerk?",
+  thinking: "Denkproces", noModel: "geen model geladen", queued: "In de wachtrij…", stopped: "gestopt",
+} : {
+  newChat: "New", send: "Send", stop: "Stop", placeholder: "Ask anything…",
+  empty: "Chat with the model on your Mac.", noKey: "No API key. Scan the QR code in AetherDrift (Connect a device).",
+  badKey: "The API key is no longer valid. Scan the QR code again.", offline: "Cannot reach the Mac. Is sharing on and are you on the same network?",
+  thinking: "Reasoning", noModel: "no model loaded", queued: "Queued…", stopped: "stopped",
+};
+document.documentElement.lang = nl ? "nl" : "en";
+
+// The key arrives in the URL fragment (never sent to the server or logged), then is kept locally.
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const frag = new URLSearchParams(location.hash.slice(1));
+if (frag.get("key")) {
+  store.set("aether.key", frag.get("key"));
+  history.replaceState(null, "", location.pathname);
+}
+const local = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
+const key = store.get("aether.key");
+
+const $ = (id) => document.getElementById(id);
+const messagesEl = $("messages"), logEl = $("log"), input = $("input"), sendBtn = $("send");
+$("new").textContent = T.newChat;
+input.placeholder = T.placeholder;
+sendBtn.textContent = T.send;
+
+let history_ = [];
+try { history_ = JSON.parse(store.get("aether.chat") || "[]"); } catch {}
+let controller = null;
+
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  if (key) h.Authorization = "Bearer " + key;
+  return h;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+// Small, safe Markdown: everything is escaped first; only a few constructs become tags.
+function inline(s) {
+  return s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+}
+function markdown(src) {
+  const out = [];
+  const parts = src.split(/```/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const body = part.replace(/^[^\n]*\n/, "");
+      out.push("<pre><code>" + escapeHtml(body) + "</code></pre>");
+      return;
+    }
+    let list = null;
+    const flush = () => { if (list) { out.push(`<${list.tag}>${list.items.join("")}</${list.tag}>`); list = null; } };
+    let para = [];
+    const flushPara = () => { if (para.length) { out.push("<p>" + para.join("<br>") + "</p>"); para = []; } };
+    for (const raw of part.split("\n")) {
+      const line = escapeHtml(raw);
+      let m;
+      if ((m = line.match(/^\s*([-*•])\s+(.*)$/)) || (m = line.match(/^\s*(\d+)[.)]\s+(.*)$/))) {
+        flushPara();
+        const tag = /\d/.test(m[1]) ? "ol" : "ul";
+        if (!list || list.tag !== tag) { flush(); list = { tag, items: [] }; }
+        list.items.push("<li>" + inline(m[2]) + "</li>");
+      } else if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+        flushPara(); flush();
+        const n = Math.min(3, m[1].length);
+        out.push(`<h${n}>${inline(m[2])}</h${n}>`);
+      } else if (!line.trim()) {
+        flushPara(); flush();
+      } else {
+        flush();
+        para.push(inline(line));
+      }
+    }
+    flushPara(); flush();
+  });
+  return out.join("");
+}
+
+// Splits "<think>…</think>answer" into its reasoning and answer parts.
+function splitThinking(text) {
+  const start = text.indexOf("<think>");
+  if (start === -1) return { think: null, answer: text };
+  const end = text.indexOf("</think>", start);
+  if (end === -1) return { think: text.slice(start + 7), answer: "", open: true };
+  return { think: text.slice(start + 7, end), answer: text.slice(0, start) + text.slice(end + 8) };
+}
+
+function render() {
+  messagesEl.innerHTML = "";
+  if (!history_.length) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = !key && !local ? T.noKey : T.empty;
+    messagesEl.append(p);
+  }
+  for (const m of history_) messagesEl.append(renderMessage(m));
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderMessage(m) {
+  const el = document.createElement("div");
+  el.className = "msg " + m.role;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  if (m.role === "user") {
+    bubble.textContent = m.content;
+  } else {
+    const { think, answer, open } = splitThinking(m.content);
+    let html = "";
+    if (think !== null && think.trim()) {
+      html += `<details class="think"${open ? " open" : ""}><summary>${T.thinking}</summary><div>${escapeHtml(think.trim())}</div></details>`;
+    }
+    html += markdown(answer.trim());
+    bubble.innerHTML = html;
+    if (m.streaming) bubble.classList.add("cursor");
+  }
+  el.append(bubble);
+  if (m.meta || m.error) {
+    const meta = document.createElement("div");
+    meta.className = "meta" + (m.error ? " error" : "");
+    meta.textContent = m.error || m.meta;
+    el.append(meta);
+  }
+  return el;
+}
+
+function save() {
+  store.set("aether.chat", JSON.stringify(history_.filter((m) => !m.streaming)));
+}
+
+async function loadModel() {
+  try {
+    const r = await fetch("/v1/models", { headers: headers() });
+    if (r.status === 401) { $("model").textContent = ""; return; }
+    const body = await r.json();
+    const def = (body.data || []).find((m) => m.id === "default");
+    $("model").textContent = def ? def.alias_of : T.noModel;
+  } catch {
+    $("model").textContent = "";
+  }
+}
+
+function setBusy(busy) {
+  sendBtn.textContent = busy ? T.stop : T.send;
+  sendBtn.classList.toggle("primary", !busy);
+}
+
+async function send(text) {
+  history_.push({ role: "user", content: text });
+  const reply = { role: "assistant", content: "", streaming: true, meta: T.queued };
+  history_.push(reply);
+  render();
+  controller = new AbortController();
+  setBusy(true);
+  // Throttle DOM updates to one per frame.
+  let pending = false;
+  const paint = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      const last = messagesEl.lastElementChild;
+      if (last) last.replaceWith(renderMessage(reply));
+      const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 120;
+      if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+    });
+  };
+  try {
+    const body = {
+      model: "default", stream: true,
+      messages: history_.filter((m) => m !== reply && !m.error).map(({ role, content }) => ({ role, content })),
+    };
+    const r = await fetch("/v1/chat/completions", {
+      method: "POST", headers: headers(), body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!r.ok) {
+      let msg = r.status === 401 ? T.badKey : `HTTP ${r.status}`;
+      try { const e = await r.json(); if (r.status !== 401 && e.error) msg = e.error.message + (e.error.hint ? " " + e.error.hint : ""); } catch {}
+      throw new Error(msg);
+    }
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    reply.meta = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) !== -1) {
+        const event = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        for (const line of event.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6);
+          if (data === "[DONE]") continue;
+          const chunk = JSON.parse(data);
+          if (chunk.error) throw new Error(chunk.error.message);
+          const choice = chunk.choices && chunk.choices[0];
+          if (choice && choice.delta && choice.delta.content) reply.content += choice.delta.content;
+          const tps = chunk.aether && chunk.aether.timings && chunk.aether.timings.decode_tps;
+          if (tps) reply.meta = `${tps.toLocaleString(nl ? "nl-NL" : "en-US", { maximumFractionDigits: 1 })} tok/s`;
+        }
+      }
+      paint();
+    }
+  } catch (e) {
+    if (e.name === "AbortError") reply.meta = T.stopped;
+    else reply.error = e instanceof TypeError ? T.offline : e.message;
+  } finally {
+    reply.streaming = false;
+    controller = null;
+    setBusy(false);
+    render();
+    save();
+  }
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (controller) { controller.abort(); return; }
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  autosize();
+  send(text);
+});
+input.addEventListener("keydown", (e) => {
+  // Enter sends on a hardware keyboard; on phones the return key inserts a newline.
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) {
+    e.preventDefault();
+    $("form").requestSubmit();
+  }
+});
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = input.scrollHeight + "px";
+}
+input.addEventListener("input", autosize);
+$("new").addEventListener("click", () => {
+  if (controller) controller.abort();
+  history_ = [];
+  save();
+  render();
+  input.focus();
+});
+
+render();
+loadModel();
+</script>
+</body>
+</html>

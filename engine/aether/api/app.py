@@ -3,16 +3,38 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from .. import __version__
 from ..runtime.errors import EngineError
-from . import aether, openai
+from . import aether, ollama, openai
 from .auth import AuthMiddleware
 from .state import EngineState
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+# The webchat is one self-contained page: inline script and style, API calls to itself only.
+WEB_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+        "connect-src 'self'; manifest-src 'self'; img-src 'self' data:; "
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    ),
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-cache",
+}
+MANIFEST = {
+    "name": "AetherDrift",
+    "short_name": "AetherDrift",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#111214",
+    "theme_color": "#111214",
+}
 
 
 async def _noop_share(_: bool) -> None:
@@ -27,7 +49,16 @@ def create_app(
     app.state.on_share_changed = on_share_changed
     app.add_middleware(AuthMiddleware, engine=engine)
     app.include_router(openai.router)
+    app.include_router(ollama.router)
     app.include_router(aether.router)
+
+    @app.get("/", include_in_schema=False)
+    async def webchat() -> HTMLResponse:
+        return HTMLResponse((WEB_DIR / "index.html").read_text(), headers=WEB_HEADERS)
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    async def manifest() -> JSONResponse:
+        return JSONResponse(MANIFEST, media_type="application/manifest+json")
 
     @app.exception_handler(EngineError)
     async def engine_error(_: Request, exc: EngineError) -> JSONResponse:

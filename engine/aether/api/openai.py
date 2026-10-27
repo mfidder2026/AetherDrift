@@ -64,6 +64,11 @@ async def ensure_model(engine: EngineState, requested: str) -> str:
                 status=409,
             )
         return loaded.info.id if loaded else (engine.stats.model["id"] or "default")
+    if requested.startswith(("/", "~", ".")):
+        # Chat clients pick from /v1/models; loading arbitrary folders is for the Mac itself.
+        raise EngineError(
+            "invalid_request", "Gebruik een model-id uit /v1/models, geen pad.", status=400
+        )
     if not engine.config.settings.allow_client_model_switch:
         current = loaded.info.id if loaded else None
         raise EngineError(
@@ -121,27 +126,20 @@ async def chat_completions(body: ChatCompletionRequest, request: Request) -> Any
         stop=stops,
         seed=body.seed,
     )
-    job, events = engine.start_job(gen)
+    job, first, events = await engine.begin(gen, request)
     created = int(time.time())
     cid = f"chatcmpl-{job.id}"
-
-    # Wait for the first event so errors become proper HTTP errors instead of a broken stream.
-    try:
-        first = await events.get()
-    except asyncio.CancelledError:
-        engine.worker.cancel(job.id)
-        raise
-    if first["type"] == "error":
-        raise EngineError(first["code"], first["message"], first.get("hint"), status=_status(first))
+    host = request.client.host if request.client else None
 
     if not body.stream:
         parts: list[str] = []
         ev = first
         while ev["type"] == "token":
             parts.append(ev["text"])
-            ev = await events.get()
+            ev = await engine.next_event(job, events, request)
         if ev["type"] == "error":
             raise EngineError(ev["code"], ev["message"], ev.get("hint"), status=_status(ev))
+        engine.count_tokens(host, ev)
         return {
             "id": cid,
             "object": "chat.completion",
@@ -182,6 +180,7 @@ async def chat_completions(body: ChatCompletionRequest, request: Request) -> Any
                     yield chunk({"content": ev["text"]})
                 elif ev["type"] == "done":
                     finished = True
+                    engine.count_tokens(host, ev)
                     yield chunk({}, ev["finish_reason"], aether={"timings": ev.get("timings")})
                     if include_usage:
                         yield sse_data(
@@ -219,3 +218,78 @@ def _openai_usage(u: dict[str, int]) -> dict[str, Any]:
 
 def _status(ev: dict[str, Any]) -> int:
     return int(ev.get("status") or 500)
+
+
+class CompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    model: str = "default"
+    prompt: str
+    stream: bool = False
+    temperature: float | None = Field(None, ge=0, le=2)
+    top_p: float | None = Field(None, gt=0, le=1)
+    max_tokens: int | None = Field(None, ge=1)
+    stop: str | list[str] | None = None
+    seed: int | None = None
+
+
+@router.post("/v1/completions", response_model=None)
+async def completions(body: CompletionRequest, request: Request) -> Any:
+    """Raw text completion: the prompt is used as-is, without a chat template."""
+    engine = _engine(request)
+    model_id = await ensure_model(engine, body.model)
+    gen = GenerateRequest(
+        prompt=body.prompt,
+        max_tokens=body.max_tokens or 256,
+        temperature=0.7 if body.temperature is None else body.temperature,
+        top_p=body.top_p or 1.0,
+        stop=[body.stop] if isinstance(body.stop, str) else list(body.stop or []),
+        seed=body.seed,
+    )
+    job, first, events = await engine.begin(gen, request)
+    created = int(time.time())
+    cid = f"cmpl-{job.id}"
+    host = request.client.host if request.client else None
+
+    def payload(text: str, finish: str | None) -> dict[str, Any]:
+        return {
+            "id": cid,
+            "object": "text_completion",
+            "created": created,
+            "model": model_id,
+            "choices": [{"index": 0, "text": text, "finish_reason": finish}],
+        }
+
+    if not body.stream:
+        parts: list[str] = []
+        ev = first
+        while ev["type"] == "token":
+            parts.append(ev["text"])
+            ev = await engine.next_event(job, events, request)
+        if ev["type"] == "error":
+            raise EngineError(ev["code"], ev["message"], ev.get("hint"), status=_status(ev))
+        engine.count_tokens(host, ev)
+        return {**payload("".join(parts), ev["finish_reason"]), "usage": _openai_usage(ev["usage"])}
+
+    async def stream() -> AsyncIterator[str]:
+        finished = False
+        try:
+            ev = first
+            while True:
+                if ev["type"] == "token":
+                    yield sse_data(payload(ev["text"], None))
+                elif ev["type"] == "done":
+                    finished = True
+                    engine.count_tokens(host, ev)
+                    yield sse_data(payload("", ev["finish_reason"]))
+                    break
+                else:
+                    finished = True
+                    yield sse_data({"error": {k: ev.get(k) for k in ("code", "message", "hint")}})
+                    break
+                ev = await events.get()
+            yield sse_data("[DONE]")
+        finally:
+            if not finished:
+                engine.worker.cancel(job.id, "cancelled")
+
+    return sse_response(stream())

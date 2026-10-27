@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..config import Settings
@@ -207,7 +207,16 @@ async def put_config(body: dict[str, Any], request: Request) -> dict[str, Any]:
     new = Settings.model_validate({**old.model_dump(), **body})
     engine.config.settings = new
     if new.share != old.share:
-        await request.app.state.on_share_changed(new.share)
+        try:
+            await request.app.state.on_share_changed(new.share)
+        except Exception as exc:  # e.g. the port is taken on the network interface
+            engine.config.settings = new.model_copy(update={"share": old.share})
+            raise EngineError(
+                "share_failed",
+                f"Delen op het netwerk kon niet starten: {exc}",
+                hint="Probeer het opnieuw of herstart de engine.",
+                status=409,
+            ) from exc
     budget_keys = ("mode", "os_reserve_gb", "engine_overhead_gb", "weights_budget_gb")
     needs_reload = engine.worker.loaded is not None and any(
         getattr(old, k) != getattr(new, k) for k in budget_keys
@@ -225,3 +234,19 @@ async def clients(request: Request) -> dict[str, Any]:
             _engine(request).clients.values(), key=lambda c: c.get("last_request", 0), reverse=True
         )
     }
+
+
+class ApiKeyBody(BaseModel):
+    key: str = Field(min_length=16, max_length=256)
+
+
+@router.put("/aether/v1/api-key", status_code=204)
+async def set_api_key(body: ApiKeyBody, request: Request) -> None:
+    """Replaces the network API key (the app keeps it in the Keychain). Loopback only.
+
+    There is deliberately no GET: the key never leaves the engine once set.
+    """
+    engine = _engine(request)
+    engine.config.api_key = body.key
+    engine.clients.clear()
+    engine.events.publish("config_changed", changed=["api_key"])

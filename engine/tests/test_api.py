@@ -76,7 +76,8 @@ def make_engine(tmp_path: Path, worker: FakeWorker, **settings: Any) -> EngineSt
 
 def client(engine: EngineState, host: str = "127.0.0.1") -> httpx.AsyncClient:
     transport = httpx.ASGITransport(app=create_app(engine), client=(host, 50000))
-    return httpx.AsyncClient(transport=transport, base_url="http://engine")
+    base = "http://127.0.0.1:8080" if host == "127.0.0.1" else "http://studio.local:8080"
+    return httpx.AsyncClient(transport=transport, base_url=base)
 
 
 CHAT = {"messages": [{"role": "user", "content": "hoi"}]}
@@ -190,3 +191,200 @@ def test_config_update_reports_reload(tmp_path: Path) -> None:
 
     body = run(go())
     assert body["mode"] == "snel" and body["requires_reload"] is True
+
+
+NET = "192.168.1.50"
+KEY = {"Authorization": "Bearer secret"}
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "headers", "status"),
+    [
+        ("GET", "/", {}, 200),  # webchat page: no key needed, holds no data
+        ("GET", "/manifest.webmanifest", {}, 200),
+        ("GET", "/v1/models", {}, 401),
+        ("GET", "/v1/models", KEY, 200),
+        ("GET", "/api/tags", KEY, 200),
+        ("GET", "/aether/v1/config", KEY, 403),  # management stays on the Mac
+        ("PUT", "/aether/v1/config", KEY, 403),
+        ("POST", "/aether/v1/models/load", KEY, 403),
+        ("GET", "/aether/v1/clients", KEY, 403),
+    ],
+)
+def test_network_surface(
+    tmp_path: Path, method: str, path: str, headers: dict, status: int
+) -> None:
+    engine = make_engine(tmp_path, FakeWorker(["a"]), share=True)
+
+    async def go() -> httpx.Response:
+        async with client(engine, host=NET) as c:
+            return await c.request(method, path, headers=headers, json={})
+
+    r = run(go())
+    assert r.status_code == status
+    if status == 403:
+        assert r.json()["error"]["code"] == "local_only"
+
+
+def test_webchat_page_has_strict_headers(tmp_path: Path) -> None:
+    async def go() -> httpx.Response:
+        async with client(make_engine(tmp_path, FakeWorker(["a"]))) as c:
+            return await c.get("/")
+
+    r = run(go())
+    assert r.headers["content-type"].startswith("text/html")
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert r.headers["referrer-policy"] == "no-referrer"
+    assert "/v1/chat/completions" in r.text
+
+
+def test_network_client_tokens_are_counted(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, FakeWorker(["Hal", "lo"]), share=True)
+
+    async def go() -> None:
+        async with client(engine, host=NET) as c:
+            await c.post("/v1/chat/completions", json=CHAT, headers=KEY)
+            await c.post("/api/chat", json={**CHAT, "stream": False}, headers=KEY)
+
+    run(go())
+    assert engine.clients[NET]["requests"] == 2
+    assert engine.clients[NET]["tokens"] == 4
+
+
+def test_ollama_chat_streams_ndjson(tmp_path: Path) -> None:
+    async def go() -> list[dict]:
+        engine = make_engine(tmp_path, FakeWorker(["Hal", "lo"]))
+        # Ollama streams by default.
+        async with client(engine) as c, c.stream("POST", "/api/chat", json=CHAT) as r:
+            assert r.headers["content-type"].startswith("application/x-ndjson")
+            return [json.loads(line) async for line in r.aiter_lines() if line]
+
+    lines = run(go())
+    assert [x["message"]["content"] for x in lines] == ["Hal", "lo", ""]
+    assert [x["done"] for x in lines] == [False, False, True]
+    final = lines[-1]
+    assert final["done_reason"] == "stop" and final["eval_count"] == 2
+    assert final["prompt_eval_count"] == 3 and final["model"] == "fake/model"
+
+
+def test_ollama_generate_and_tags(tmp_path: Path) -> None:
+    async def go() -> tuple[dict, dict, dict]:
+        async with client(make_engine(tmp_path, FakeWorker(["4"]))) as c:
+            gen = await c.post(
+                "/api/generate", json={"prompt": "2+2?", "stream": False, "options": {"seed": 1}}
+            )
+            tags = await c.get("/api/tags")
+            ver = await c.get("/api/version")
+            return gen.json(), tags.json(), ver.json()
+
+    gen, tags, ver = run(go())
+    assert gen["response"] == "4" and gen["done"] is True
+    assert tags == {"models": []}
+    assert ver["version"]
+
+
+def test_ollama_error_is_http_error(tmp_path: Path) -> None:
+    worker = FakeWorker([], error={"code": "model_not_loaded", "message": "x", "status": 409})
+
+    async def go() -> httpx.Response:
+        async with client(make_engine(tmp_path, worker)) as c:
+            return await c.post("/api/chat", json=CHAT)
+
+    r = run(go())
+    assert r.status_code == 409 and r.json()["error"]["code"] == "model_not_loaded"
+
+
+def test_text_completions(tmp_path: Path) -> None:
+    async def go() -> dict:
+        async with client(make_engine(tmp_path, FakeWorker(["b", "c"]))) as c:
+            return (await c.post("/v1/completions", json={"prompt": "a"})).json()
+
+    body = run(go())
+    assert body["object"] == "text_completion"
+    assert body["choices"][0]["text"] == "bc"
+    assert body["usage"]["completion_tokens"] == 2
+
+
+def test_share_toggle_does_not_reload(tmp_path: Path) -> None:
+    async def go() -> dict:
+        async with client(make_engine(tmp_path, FakeWorker(["a"]))) as c:
+            return (await c.put("/aether/v1/config", json={"share": True})).json()
+
+    assert run(go())["requires_reload"] is False
+
+
+def test_api_key_rotation(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, FakeWorker(["a"]), share=True)
+    new = "n" * 32
+
+    async def go() -> tuple[int, int, int, int]:
+        async with client(engine) as local, client(engine, host=NET) as net:
+            denied = await net.put("/aether/v1/api-key", json={"key": new}, headers=KEY)
+            ok = await local.put("/aether/v1/api-key", json={"key": new})
+            old = await net.get("/v1/models", headers=KEY)
+            fresh = await net.get("/v1/models", headers={"Authorization": f"Bearer {new}"})
+            return denied.status_code, ok.status_code, old.status_code, fresh.status_code
+
+    assert run(go()) == (403, 204, 401, 200)
+
+
+@pytest.mark.parametrize(
+    ("headers", "status"),
+    [
+        ({}, 200),
+        ({"Origin": "http://127.0.0.1:8080"}, 200),  # the webchat itself
+        ({"Origin": "http://localhost:3000"}, 200),
+        ({"Origin": "https://evil.example"}, 403),  # CSRF from a web page
+        ({"Host": "evil.example:8080"}, 403),  # DNS rebinding
+        ({"Host": "localhost:8080"}, 200),
+    ],
+)
+def test_loopback_refuses_web_pages(tmp_path: Path, headers: dict, status: int) -> None:
+    async def go() -> httpx.Response:
+        async with client(make_engine(tmp_path, FakeWorker(["a"]))) as c:
+            return await c.post("/aether/v1/models/unload", headers=headers)
+
+    r = run(go())
+    if status == 403:
+        assert r.status_code == 403 and r.json()["error"]["code"] == "foreign_origin"
+    else:
+        assert r.status_code != 403
+
+
+def test_chat_api_refuses_model_paths(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, FakeWorker(["a"]), allow_client_model_switch=True)
+
+    async def go() -> httpx.Response:
+        async with client(engine) as c:
+            return await c.post("/v1/chat/completions", json={**CHAT, "model": "/Users/x/m"})
+
+    r = run(go())
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_request"
+
+
+def test_failed_share_start_is_not_saved(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, FakeWorker(["a"]))
+
+    async def refuse(_: bool) -> None:
+        raise OSError(48, "Address already in use")
+
+    async def go() -> httpx.Response:
+        transport = httpx.ASGITransport(app=create_app(engine, refuse), client=("127.0.0.1", 1))
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:8080") as c:
+            return await c.put("/aether/v1/config", json={"share": True, "mode": "snel"})
+
+    r = run(go())
+    assert r.status_code == 409 and r.json()["error"]["code"] == "share_failed"
+    assert engine.config.settings.share is False
+    assert engine.config.settings.mode == "snel"  # the rest of the change still applies
+
+
+def test_ollama_accepts_json_without_content_type(tmp_path: Path) -> None:
+    async def go() -> httpx.Response:
+        async with client(make_engine(tmp_path, FakeWorker(["hoi"]))) as c:
+            body = json.dumps({**CHAT, "stream": False})
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}  # what curl -d sends
+            return await c.post("/api/chat", content=body, headers=headers)
+
+    r = run(go())
+    assert r.status_code == 200 and r.json()["message"]["content"] == "hoi"
