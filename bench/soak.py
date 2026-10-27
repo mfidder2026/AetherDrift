@@ -83,6 +83,7 @@ def main() -> None:
     stop = threading.Event()
 
     def sample() -> None:
+        client = httpx.Client(timeout=5)
         while not stop.is_set():
             t0 = time.perf_counter()
             subprocess.run(["/usr/bin/true"], check=False)
@@ -90,6 +91,10 @@ def main() -> None:
             t1 = time.perf_counter()
             time.sleep(0.02)
             sleep_late_ms = (time.perf_counter() - t1) * 1000 - 20
+            try:
+                mem = client.get(f"{url}/aether/v1/stats").json()["memory"]
+            except httpx.HTTPError:
+                mem = {}
             samples.append(
                 {
                     "t": time.time(),
@@ -99,6 +104,8 @@ def main() -> None:
                     "available": psutil.virtual_memory().available,
                     "spawn_ms": spawn_ms,
                     "sleep_late_ms": sleep_late_ms,
+                    "mlx_active": mem.get("mlx_active_bytes"),
+                    "mlx_cache": mem.get("mlx_cache_bytes"),
                 }
             )
             time.sleep(max(0.0, 1.0 - (time.perf_counter() - t0)))

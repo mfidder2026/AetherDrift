@@ -74,7 +74,9 @@ def test_plan_layout(tmp_path: Path) -> None:
     for span in (s for u in plan.units for s in u.spans):
         at_eof = span.file_offset + span.nbytes == os.path.getsize(span.file)
         assert span.file_offset % PAGE == 0 and (span.nbytes % PAGE == 0 or at_eof)
-    assert unit.buffer_bytes == sum(s.nbytes for s in unit.spans)
+    assert unit.buffer_bytes >= sum(s.nbytes for s in unit.spans)
+    for span in (s for u in plan.units for s in u.spans):
+        assert span.buffer_offset % PAGE == 0
     assert unit.buffer_bytes >= sum(t.nbytes for t in unit.tensors)
     assert [t.name for t in plan.core] == ["model.embed_tokens.weight"]
 
@@ -124,7 +126,9 @@ def test_prefetch_keeps_ring_full_and_evicts(tmp_path: Path) -> None:
 def test_shrink_unpins_layers(tmp_path: Path) -> None:
     _, plan, res, events = _residency(tmp_path, pinned=4)
     before = res.resident_bytes
-    res.request_shrink(plan.units[3].buffer_bytes)
+    assert res.request_shrink(plan.units[3].buffer_bytes)
+    # While idle, repeated requests must not pile up (they would later unpin everything).
+    assert not res.request_shrink(plan.units[3].buffer_bytes)
     got = res.acquire(0)
     assert got
     res.release(0)
@@ -236,3 +240,41 @@ def test_unaligned_read_is_exact_including_file_end(tmp_path: Path) -> None:
         backend.submit_unaligned(ReadRequest(str(f), offset, n), memoryview(dest)).result()
         assert np.array_equal(dest, data[offset : offset + n]), (offset, n)
     backend.close()
+
+
+def test_failed_layer_read_is_retried_not_reused(tmp_path: Path) -> None:
+    """Regression: a failed read used to count as a hit and leave its slot in use forever."""
+    from concurrent.futures import Future
+
+    model, _, res, _ = _residency(tmp_path, pinned=0, slots=3, depth=2)
+    inner = res.backend
+    fail = {"on": True}
+
+    class Flaky:
+        def submit(self, *a, **kw):  # noqa: ANN002, ANN003, ANN202
+            if not fail["on"]:
+                return inner.submit(*a, **kw)
+            f: Future[None] = Future()
+            f.set_exception(OSError(5, "Input/output error"))
+            return f
+
+        def __getattr__(self, name: str):  # noqa: ANN204
+            return getattr(inner, name)
+
+    res.backend = Flaky()
+    for s in res.slots:  # drop the reads started by load_pinned
+        s.owner, s.future = None, None
+    for _ in range(4):  # more failures than slots: none may stay "in use"
+        with pytest.raises(OSError):
+            res.acquire(0)
+    assert not any(s.in_use for s in res.slots)
+    fail["on"] = False
+    reference = {}
+    for f in model.glob("*.safetensors"):
+        reference.update(mx.load(str(f)))
+    for layer in range(N_LAYERS):
+        got = res.acquire(layer)
+        for name, arr in got.items():
+            assert mx.array_equal(arr, reference[f"model.layers.{layer}.{name}"]).item()
+        res.release(layer)
+    res.close()

@@ -17,6 +17,7 @@ flush the decode working set.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from collections import deque
@@ -32,6 +33,8 @@ from ..telemetry.stats import Stats
 from .index import WeightIndex
 from .io_backend import PreadBackend, ReadRequest, _all_of
 from .units import SAFETENSORS_DTYPES
+
+log = logging.getLogger("aether.experts")
 
 HALF_LIFE_TOKENS = 256
 HIT_WINDOW = 4096
@@ -185,12 +188,12 @@ class ExpertCache:
         if not missing:
             return []
         for slot in [s for s, f in ls.pending.items() if f.done()]:
-            ls.pending.pop(slot).result()  # finished reads: slot is evictable again
+            self._settle(layer, slot)  # finished reads: slot is evictable again
         if required:
             # Reads still in flight for experts we do not need now: let them finish so
             # their slots can be reused.
             for slot in [s for s in ls.pending if int(ls.owner[s]) not in protect]:
-                ls.pending.pop(slot).result()
+                self._settle(layer, slot)
         free = [s for s in range(ls.slots) if ls.owner[s] < 0]
         if len(free) < len(missing):
             score = ls.score(now)
@@ -237,15 +240,43 @@ class ExpertCache:
             )
         return futures
 
+    def _settle(self, layer: int, slot: int, raise_errors: bool = False) -> None:
+        """Collect a slot's finished (or still running) read.
+
+        A failed read must never leave its expert mapped: the slot holds partial data. The
+        expert is unmapped so the next use reads it again.
+        """
+        ls = self.layers[layer]
+        fut = ls.pending.pop(slot, None)
+        if fut is None:
+            return
+        try:
+            fut.result()
+        except Exception:
+            expert = int(ls.owner[slot])
+            if expert >= 0:
+                ls.slot_of[expert] = -1
+                ls.prefetched.discard(expert)
+            ls.owner[slot] = -1
+            log.warning("layer %d: read of expert %d failed", layer, expert, exc_info=True)
+            if raise_errors:
+                raise
+
     def _wait(self, layer: int, experts: np.ndarray) -> None:
         ls = self.layers[layer]
         t0 = time.perf_counter()
+        error: Exception | None = None
         for e in experts.tolist():
             slot = int(ls.slot_of[e])
-            fut = ls.pending.pop(slot, None)
-            if fut is not None:
-                fut.result()
+            if slot < 0:
+                continue
+            try:
+                self._settle(layer, slot, raise_errors=True)
+            except Exception as exc:  # settle the others too, so none stays mapped
+                error = error or exc
         self.stall_seconds += time.perf_counter() - t0
+        if error is not None:
+            raise error
 
     def ensure(
         self,
@@ -263,6 +294,9 @@ class ExpertCache:
         ls = self.layers[layer]
         now = self.tokens
         needed = experts.tolist()
+        # Collect finished reads first: a failed prefetch must count as missing, not present.
+        for slot in [s for s, f in ls.pending.items() if f.done()]:
+            self._settle(layer, slot)
         present = ls.slot_of[experts] >= 0
         if decode:
             self._hits.extend(present.tolist())

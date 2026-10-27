@@ -206,3 +206,49 @@ def test_prefetch_is_best_effort_and_counted(tmp_path: Path) -> None:
     assert cache.prefetch_used == 1
     cache.publish(1, LAYERS)
     assert cache.stats.snapshot()["drift"]["prefetch_accuracy"] == 0.5
+
+
+class _FailingReads:
+    """Wraps a backend; while `fail` is set every read ends in an I/O error."""
+
+    def __init__(self, inner: PreadBackend) -> None:
+        self.inner = inner
+        self.fail = False
+
+    def submit_unaligned(self, req, dest):  # noqa: ANN001
+        from concurrent.futures import Future
+
+        if not self.fail:
+            return self.inner.submit_unaligned(req, dest)
+        f: Future[None] = Future()
+        f.set_exception(OSError(5, "Input/output error"))
+        return f
+
+    def __getattr__(self, name: str):  # noqa: ANN204
+        return getattr(self.inner, name)
+
+
+def test_failed_read_never_leaves_expert_mapped(tmp_path: Path) -> None:
+    """Regression: a failed read used to leave its expert 'resident' with partial data."""
+    model, _, cache, _ = _cache(tmp_path, slots=3)
+    flaky = _FailingReads(cache.backend)
+    cache.backend = flaky
+    flaky.fail = True
+    with pytest.raises(OSError):
+        cache.ensure(0, np.array([1, 2]), decode=True)
+    ls = cache.layers[0]
+    assert ls.slot_of[1] < 0 and ls.slot_of[2] < 0
+    # A failed speculative prefetch is not an error and is not left mapped either.
+    flaky.fail = False
+    cache.ensure(0, np.array([1, 2]), decode=True)
+    flaky.fail = True
+    cache.tick()
+    cache.ensure(0, np.array([1, 2]), decode=True, prefetch=(1, np.array([5, 6])))
+    flaky.fail = False
+    cache.tick()
+    mapping = np.array(cache.ensure(1, np.array([5, 6]), decode=True))  # reads them again
+    ref = _reference(model, 1, "up_proj.weight")
+    for e in (5, 6):
+        assert mx.array_equal(
+            cache.layers[1].tensors["up_proj.weight"][int(mapping[e])], ref[e]
+        ).item()

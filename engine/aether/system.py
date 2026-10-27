@@ -7,6 +7,7 @@ import ctypes
 import ctypes.util
 import fcntl
 import json
+import mmap
 import os
 import platform
 import tempfile
@@ -14,6 +15,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .config import auto_os_reserve_gb
 from .drift.io_backend import PreadBackend, ReadRequest
 
 _libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
@@ -53,7 +55,7 @@ class SystemInfo:
     ssd_read_bytes_per_s: float | None = None  # measured; None until first SSD test
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {**asdict(self), "os_reserve_auto_gb": auto_os_reserve_gb(self.ram_bytes)}
 
 
 def detect(working_set_bytes: int, data_dir: Path) -> SystemInfo:
@@ -70,6 +72,9 @@ def detect(working_set_bytes: int, data_dir: Path) -> SystemInfo:
     return info
 
 
+SSD_TEST_PIECE = 256 * 1024**2
+
+
 def quick_ssd_test(data_dir: Path, size: int = 2 * 1024**3) -> float:
     """≤ 5 s read test on the volume holding the models. Returns bytes/s and caches it."""
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -82,16 +87,23 @@ def quick_ssd_test(data_dir: Path, size: int = 2 * 1024**3) -> float:
             written += os.write(fd, block)
         fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
         os.close(fd)
+        fd = -1  # never close twice: the number may already belong to another file
         backend = PreadBackend(threads=8)
+        # A small reused, page-aligned buffer: a model may be loaded, so no 2 GB allocation.
+        buf = mmap.mmap(-1, SSD_TEST_PIECE)
         try:
             start = time.perf_counter()
-            backend.read(ReadRequest(name, 0, written))
+            for pos in range(0, written, SSD_TEST_PIECE):
+                n = min(SSD_TEST_PIECE, written - pos)
+                backend.submit(ReadRequest(name, pos, n), memoryview(buf)[:n]).result()
             speed = written / (time.perf_counter() - start)
         finally:
             backend.close()
+            buf.close()
     finally:
-        with contextlib.suppress(OSError):
-            os.close(fd)
+        if fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(fd)
         os.unlink(name)
     (data_dir / "system.json").write_text(json.dumps({"ssd_read_bytes_per_s": speed}))
     return speed

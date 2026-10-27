@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from aether.config import GB, Mode, Settings
-from aether.memory.budget import ModelShape, estimate_fit, kv_bytes_per_token, plan
+from aether.memory.budget import (
+    ModelShape,
+    estimate_fit,
+    kv_bytes_per_token,
+    plan,
+    usable_bytes,
+)
 
 RAM = 128 * GB
 WORKING_SET = int(107.5 * GB)  # M3 Max 128 GB reports ~115.4e9 bytes
@@ -65,3 +71,13 @@ def test_too_large_when_resident_part_does_not_fit() -> None:
     huge = ModelShape(2000 * GB, 150 * GB, 20 * GB, 1000, 4096)
     fit = estimate_fit(huge, plan(huge, RAM, WORKING_SET, Settings()), 6.7e9)
     assert fit.mode == "too_large" and fit.expected_tps is None
+
+
+def test_os_reserve_scales_with_ram() -> None:
+    no_limit = 1024 * GB  # working set not the constraint here
+    s = Settings()
+    assert usable_bytes(16 * GB, no_limit, s) == (16 - 4 - 2) * GB  # 4 GB floor
+    assert usable_bytes(32 * GB, no_limit, s) == (32 - 8 - 2) * GB  # a quarter
+    assert usable_bytes(96 * GB, no_limit, s) == (96 - 16 - 2) * GB  # 16 GB cap
+    assert usable_bytes(512 * GB, no_limit, s) == (512 - 16 - 2) * GB
+    assert usable_bytes(32 * GB, no_limit, Settings(os_reserve_gb=12)) == (32 - 12 - 2) * GB

@@ -38,6 +38,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["psutil", "psutil.*", "tqdm", "tqdm.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

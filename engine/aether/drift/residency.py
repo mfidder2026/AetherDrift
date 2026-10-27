@@ -11,6 +11,7 @@ All methods except the read-completion callbacks run on the MLX thread.
 from __future__ import annotations
 
 import bisect
+import contextlib
 import threading
 import time
 from collections import deque
@@ -166,6 +167,9 @@ class DenseResidency:
             return self.pinned[layer]
 
         slot = self._slot_of(layer)
+        if slot is not None and _failed(slot.future):
+            slot.owner, slot.future = None, None  # partial data: read it again
+            slot = None
         hit = slot is not None and slot.future is not None and slot.future.done()
         if slot is None:
             slot = self._free_slot(exclude=set())
@@ -177,8 +181,13 @@ class DenseResidency:
         if not hit:
             t0 = time.perf_counter()
             assert slot.future is not None
-            slot.future.result()
-            self.stall_seconds += time.perf_counter() - t0
+            try:
+                slot.future.result()
+            except Exception:
+                slot.owner, slot.future, slot.in_use = None, None, False
+                raise
+            finally:
+                self.stall_seconds += time.perf_counter() - t0
         self._hits.append(hit)
         self._publish()
         return slot.buffer.tensors(self.units[layer])
@@ -190,21 +199,33 @@ class DenseResidency:
 
     # ---- memory pressure ---------------------------------------------------------------
 
-    def request_shrink(self, nbytes: int) -> None:
-        """Thread-safe; applied on the MLX thread at the next layer boundary."""
+    def pinned_bytes(self) -> int:
+        """Thread-safe (the memory guard asks from its own thread)."""
         with self._lock:
-            self._shrink_request += nbytes
+            return sum(self._pinned_bytes.values())
+
+    def request_shrink(self, nbytes: int) -> bool:
+        """Thread-safe; applied on the MLX thread at the next layer boundary.
+
+        Returns False while an earlier request is still pending: without a generation running
+        nothing is applied, and stacking requests would later unpin everything at once.
+        """
+        with self._lock:
+            if self._shrink_request:
+                return False
+            self._shrink_request = nbytes
+            return True
 
     def _apply_shrink(self) -> None:
         with self._lock:
             want, self._shrink_request = self._shrink_request, 0
-        freed = 0
-        for layer in sorted(self.pinned, reverse=True):
-            if freed >= want:
-                break
-            del self.pinned[layer]
-            freed += self._pinned_bytes.pop(layer)
-            bisect.insort(self.streamed, layer)
+            freed = 0
+            for layer in sorted(self.pinned, reverse=True):
+                if freed >= want:
+                    break
+                del self.pinned[layer]
+                freed += self._pinned_bytes.pop(layer)
+                bisect.insort(self.streamed, layer)
         self._pos = {layer: i for i, layer in enumerate(self.streamed)}
         if freed and not self.slots:
             self.slots = [Slot(UnitBuffer(self.plan.max_unit_bytes)) for _ in range(self.depth + 1)]
@@ -242,7 +263,9 @@ class DenseResidency:
 
     def _start(self, slot: Slot, layer: int) -> None:
         if slot.future is not None and not slot.future.done():
-            slot.future.result()  # never overwrite a buffer that is still being filled
+            # Never overwrite a buffer that is still being filled; its outcome no longer matters.
+            with contextlib.suppress(Exception):
+                slot.future.result()
         if slot.owner is not None:
             old = self.units[slot.owner]
             self.events.publish("evict", unit=old.name, bytes=old.nbytes)
@@ -283,7 +306,12 @@ class DenseResidency:
     def close(self) -> None:
         for s in self.slots:
             if s.future is not None and not s.future.done():
-                s.future.result()
+                with contextlib.suppress(Exception):
+                    s.future.result()
         self.slots.clear()
         self.pinned.clear()
         self._pinned_bytes.clear()
+
+
+def _failed(fut: Future[Any] | None) -> bool:
+    return fut is not None and fut.done() and fut.exception() is not None

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from ..config import GB, MODE_CONTEXT, MODE_KV_BITS, Settings
+from ..config import GB, MODE_CONTEXT, MODE_KV_BITS, Settings, auto_os_reserve_gb
 
 # Assumed effective GPU memory bandwidth for the resident estimate. Replaced by measured
 # averages once a model has been used.
@@ -71,7 +71,10 @@ def kv_bytes_per_token(cfg: dict, dtype_bytes: int = 2) -> int:
 
 
 def usable_bytes(ram: int, working_set: int, settings: Settings) -> int:
-    reserve = int(settings.os_reserve_gb * GB)
+    reserve_gb = settings.os_reserve_gb
+    if reserve_gb is None:
+        reserve_gb = auto_os_reserve_gb(ram)
+    reserve = int(reserve_gb * GB)
     overhead = int(settings.engine_overhead_gb * GB)
     return max(0, min(ram - reserve, working_set) - overhead)
 

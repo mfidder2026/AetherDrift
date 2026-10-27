@@ -106,7 +106,7 @@ class PreadBackend:
                 self._fds[path] = fd
             return fd
 
-    def _read_into(self, fd: int, view: memoryview, offset: int) -> int:
+    def _read_into(self, fd: int, view: memoryview | np.ndarray, offset: int) -> int:
         start = time.perf_counter()
         done = 0
         while done < len(view):

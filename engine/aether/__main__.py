@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import uvicorn
+from starlette.types import ASGIApp
 
 from . import __version__
 from .api.app import create_app
@@ -56,7 +57,7 @@ def parse_args(argv: list[str] | None = None) -> EngineConfig:
     p.add_argument("--share", action="store_true", help="also listen on the network")
     p.add_argument("--mode", choices=[m.value for m in Mode], default=Mode.BALANCED.value)
     p.add_argument("--weights-budget", help="cap for weights, e.g. 2GB")
-    p.add_argument("--os-reserve-gb", type=float, default=16.0)
+    p.add_argument("--os-reserve-gb", type=float, help="default: automatic (a quarter of RAM)")
     p.add_argument("--model", help="model id or path to load at startup")
     p.add_argument("--log-level", default="INFO")
     a = p.parse_args(argv)
@@ -122,7 +123,7 @@ def pick_port(host: str, wanted: int) -> int:
     raise SystemExit(f"no free port in {wanted}-{wanted + PORT_ATTEMPTS - 1}")
 
 
-def _server(app: object, host: str, port: int) -> uvicorn.Server:
+def _server(app: ASGIApp, host: str, port: int) -> uvicorn.Server:
     config = uvicorn.Config(
         app,
         host=host,

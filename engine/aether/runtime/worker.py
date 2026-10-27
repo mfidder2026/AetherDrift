@@ -18,11 +18,12 @@ from pathlib import Path
 from typing import Any
 
 import mlx.core as mx
-from mlx.utils import tree_flatten
 
 from ..config import EngineConfig
 from ..memory.budget import Budget, estimate_fit, plan
+from ..mlx_params import flat_params
 from ..models.registry import LocalModel, Registry
+from ..power import KeepAwake
 from ..telemetry.events import EventBus
 from ..telemetry.stats import Stats
 from .errors import EngineError
@@ -90,6 +91,7 @@ class Worker(threading.Thread):
         self._commands: queue.Queue[tuple[str, Any, Future[Any]]] = queue.Queue()
         self._jobs: dict[str, Job] = {}
         self._current: Job | None = None
+        self.keep_awake = KeepAwake()
         self._ready = threading.Event()
         self._prompt_cache: Any = None
         self._default_cache_limit: int | None = None
@@ -120,11 +122,10 @@ class Worker(threading.Thread):
         loaded = self.loaded
         if loaded is None or loaded.mode != "drift-dense":
             return 0  # expert slots are fixed-size tensors; shrinking them is not supported yet
-        pinned = sum(loaded.drift._pinned_bytes.values())
-        want = int(pinned * fraction)
-        if want:
-            loaded.drift.request_shrink(want)
-        return want
+        want = int(loaded.drift.pinned_bytes() * fraction)
+        if want and loaded.drift.request_shrink(want):
+            return want
+        return 0
 
     def cancel_current(self, reason: str) -> None:
         if self._current is not None:
@@ -147,11 +148,14 @@ class Worker(threading.Thread):
                 continue
             try:
                 if kind == "generate":
-                    fut.set_result(self._generate(payload))
+                    with self.keep_awake:
+                        self._generate(payload)
+                    fut.set_result(None)
                 elif kind == "load":
                     fut.set_result(self._load(payload))
                 elif kind == "unload":
-                    fut.set_result(self._unload())
+                    self._unload()
+                    fut.set_result(None)
                 elif kind == "call":  # run an arbitrary function on the MLX thread
                     fut.set_result(payload())
                 else:
@@ -241,9 +245,9 @@ class Worker(threading.Thread):
 
         # Never two models in memory at once.
         self._unload()
-        self._ensure_memory(
-            info.id, fit.required_min_bytes if fit.mode != "resident" else shape.total_bytes, budget
-        )
+        # Drift fills its weights budget (pinned layers or expert slots); resident loads it all.
+        need = shape.total_bytes if fit.mode == "resident" else budget.weights_bytes
+        self._ensure_memory(info.id, min(need, shape.total_bytes), budget)
         self.stats.update("model", id=info.id, state="loading", mode=fit.mode, progress=0.0)
         self.events.publish("model_progress", model=info.id, progress=0.0, bytes=0)
         mx.reset_peak_memory()
@@ -312,9 +316,10 @@ class Worker(threading.Thread):
     def _load_resident(self, info: LocalModel) -> tuple[Any, Any, int]:
         from mlx_lm import load as mlx_load
 
-        model, tokenizer = mlx_load(info.path, lazy=True)
+        loaded = mlx_load(info.path, lazy=True)
+        model, tokenizer = loaded[0], loaded[1]
         # Materialise weights in batches so we can report real progress.
-        params = tree_flatten(model.parameters())
+        params = flat_params(model)
         total = sum(v.nbytes for _, v in params) or 1
         done = 0
         last_report = 0.0
@@ -364,13 +369,13 @@ class Worker(threading.Thread):
             model = build_drift_model(info.path, drift)
             pinned_total = sum(u.buffer_bytes for u in dense.units[:pinned]) or 1
             drift.load_pinned(lambda f: self._progress(info.id, f, int(f * pinned_total)))
+            tokenizer = _tokenizer(info.path)
         except Exception:
             drift.close()
             backend.close()
             mx.set_cache_limit(self._default_cache_limit)
             self._default_cache_limit = None
             raise
-        tokenizer = _tokenizer(info.path)
         self.events.publish(
             "drift_plan",
             model=info.id,
@@ -408,13 +413,13 @@ class Worker(threading.Thread):
         cache.prefetch_enabled = lambda: self.config.settings.prefetch_experts
         try:
             model = build_moe_model(info.path, cache, lambda f: self._progress(info.id, f, 0))
+            tokenizer = _tokenizer(info.path)
         except Exception:
             cache.close()
             backend.close()
             mx.set_cache_limit(self._default_cache_limit)
             self._default_cache_limit = None
             raise
-        tokenizer = _tokenizer(info.path)
         resident = plan.resident_bytes + cache.resident_bytes + plan.prefill_bytes
         self.events.publish(
             "drift_plan",
@@ -482,7 +487,12 @@ class Worker(threading.Thread):
                 )
             max_tokens = min(job.request.max_tokens, ctx_max - len(prompt))
 
-            cache, rest = self._prompt_cache.fetch_nearest_cache(lm.info.path, prompt)
+            use_cache = self.config.settings.prompt_cache_entries > 0
+            cache, rest = (
+                self._prompt_cache.fetch_nearest_cache(lm.info.path, prompt)
+                if use_cache
+                else (None, prompt)
+            )
             # Reusing a tiny prefix saves nothing but splits the prefill, which changes
             # rounding (and so greedy output) compared to a single pass.
             if cache is None or len(prompt) - len(rest) < MIN_PROMPT_REUSE:
@@ -494,6 +504,11 @@ class Worker(threading.Thread):
                 else:
                     cache, rest = make_prompt_cache(lm.model), prompt
             cached = len(prompt) - len(rest)
+            # The working cache is a copy; stored entries + this request together must fit
+            # the KV budget, so make room before generating.
+            per_token = lm.budget.kv_bytes // max(1, lm.budget.context_tokens)
+            working = per_token * (len(prompt) + max_tokens)
+            self._prompt_cache.trim_to(n_bytes=max(0, lm.budget.kv_bytes - working))
 
             if job.request.seed is not None:
                 mx.random.seed(job.request.seed)
@@ -560,7 +575,8 @@ class Worker(threading.Thread):
             if finish != "stop" and len(text) > emitted:
                 job.emit({"type": "token", "text": text[emitted:]})
 
-            self._prompt_cache.insert_cache(lm.info.path, key, cache)
+            if use_cache:
+                self._prompt_cache.insert_cache(lm.info.path, key, cache)
             kv_now = sum(c.nbytes for c in cache)
             self.stats.update("memory", kv_bytes=kv_now)
             decode_tps = round(last.generation_tps, 2) if last else None

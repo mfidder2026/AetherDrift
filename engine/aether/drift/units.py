@@ -152,7 +152,9 @@ def build_unit(layer: int, entries: list[TensorEntry]) -> LayerUnit:
                 unit.realign = True
             rel = t.name.split(f"layers.{layer}.", 1)[1]
             unit.tensors.append(TensorSlot(rel, t.nbytes, rel_offset, t.dtype, t.shape))
-        buffer_offset += end - start
+        # Keep every span's destination page-aligned, also after a span cut short at a file
+        # end; a misaligned destination would make the read go through the page cache.
+        buffer_offset += _up(end - start)
     unit.buffer_bytes = buffer_offset
     return unit
 

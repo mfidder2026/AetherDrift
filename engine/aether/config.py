@@ -32,13 +32,21 @@ MODE_KV_BITS: dict[Mode, int | None] = {
 }
 
 
+def auto_os_reserve_gb(ram_bytes: int) -> float:
+    """Memory kept free for macOS and other apps: a quarter of RAM, between 4 and 16 GB.
+
+    A fixed 16 GB left nothing on a 16 GB Mac; on large Macs 16 GB is plenty.
+    """
+    return min(16.0, max(4.0, ram_bytes / GB / 4))
+
+
 class Settings(BaseModel):
     """Runtime-changeable settings, exposed via GET/PUT /aether/v1/config."""
 
     mode: Mode = Mode.BALANCED
     share: bool = False
     allow_client_model_switch: bool = False
-    os_reserve_gb: float = Field(16.0, ge=4.0, le=64.0)
+    os_reserve_gb: float | None = Field(None, ge=4.0, le=64.0, description="None = automatic")
     engine_overhead_gb: float = Field(2.0, ge=0.5, le=16.0)
     weights_budget_gb: float | None = Field(None, gt=0, description="Override; None = automatic")
     prefill_step_size: int = Field(2048, ge=128, le=16384)

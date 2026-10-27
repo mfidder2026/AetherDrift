@@ -14,8 +14,9 @@ from typing import Any
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
-from mlx.utils import tree_flatten, tree_unflatten
+from mlx.utils import tree_unflatten
 
+from ..mlx_params import flat_params
 from ..runtime.errors import EngineError
 from .experts import ExpertCache
 from .residency import DenseResidency
@@ -29,18 +30,22 @@ class DriftLayer:
         self.layer = layer
         self.residency = residency
         self._placeholders = tree_unflatten(
-            [(k, mx.zeros((1,), dtype=v.dtype)) for k, v in tree_flatten(inner.parameters())]
+            [(k, mx.zeros((1,), dtype=v.dtype)) for k, v in flat_params(inner)]
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         params = self.residency.acquire(self.layer)
-        self.inner.update(tree_unflatten(list(params.items())))
-        out = self.inner(*args, **kwargs)
-        if self.layer not in self.residency.pinned:
+        if self.layer in self.residency.pinned:
+            self.inner.update(tree_unflatten(list(params.items())))
+            return self.inner(*args, **kwargs)
+        try:
+            self.inner.update(tree_unflatten(list(params.items())))
+            out = self.inner(*args, **kwargs)
             mx.eval(out)  # weights must be consumed before their slot is reused
+            return out
+        finally:
             self.inner.update(self._placeholders)
             self.residency.release(self.layer)
-        return out
 
     def __getattr__(self, name: str) -> Any:  # e.g. cache construction peeking at attributes
         return getattr(self.inner, name)
@@ -76,7 +81,7 @@ def build_drift_model(path: str, residency: DenseResidency) -> nn.Module:
         )
 
     for i, layer in enumerate(layers):
-        expected = {k for k, _ in tree_flatten(layer.parameters())}
+        expected = {k for k, _ in flat_params(layer)}
         have = {t.name for t in residency.units[residency.order[i]].tensors}
         if expected != have:
             missing = sorted(expected - have)[:3]
@@ -90,7 +95,7 @@ def build_drift_model(path: str, residency: DenseResidency) -> nn.Module:
     # Wrap before evaluating anything so the lazy layer weights are never read from disk.
     for i, layer in enumerate(layers):
         layers[i] = DriftLayer(layer, residency.order[i], residency)
-    core = [v for _, v in tree_flatten(model.parameters())]  # layers are no longer Modules
+    core = [v for _, v in flat_params(model)]  # layers are no longer Modules
     mx.eval(core)
     return model
 
@@ -169,7 +174,7 @@ def build_moe_model(path: str, cache: ExpertCache, progress: Any = None) -> nn.M
         for p in parents:
             owner = getattr(owner, p)
         inner = getattr(owner, leaf)
-        expected = {k for k, _ in tree_flatten(inner.parameters())}
+        expected = {k for k, _ in flat_params(inner)}
         if expected != set(slots.tensors):
             raise EngineError(
                 "drift_unsupported",
@@ -195,7 +200,7 @@ def build_moe_model(path: str, cache: ExpertCache, progress: Any = None) -> nn.M
             switch._next = (next_idx, next_block)
 
     # Everything still lazy now is the resident part: materialise it with progress.
-    params = [v for _, v in tree_flatten(model.parameters())]
+    params = [v for _, v in flat_params(model)]
     total = sum(v.nbytes for v in params) or 1
     done, batch, batch_bytes = 0, [], 0
     for v in params:

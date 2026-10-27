@@ -45,7 +45,7 @@ def test_warning_shrinks_drift_with_cooldown(setup) -> None:
     assert worker.relieved == [0.10, 0.10]
     assert worker.cancelled == []
     actions = [e["action"] for e in events.since(0) if e["type"] == "pressure"]
-    assert actions and "Drift-cache verkleind" in actions[0]
+    assert actions and "Drift-cache wordt verkleind" in actions[0]
 
 
 def test_critical_stops_generation_once(setup) -> None:

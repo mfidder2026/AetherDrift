@@ -51,7 +51,7 @@ class MemoryGuard:
             freed = self.worker.relieve_memory(SHRINK_STEP)
             self._last_shrink = now
             if freed:
-                action = f"Drift-cache verkleind met {freed / GB:.1f} GB"
+                action = f"Drift-cache wordt verkleind met {freed / GB:.1f} GB"
         if level == "critical" and self.level != "critical" and self.worker.loaded is not None:
             self.worker.cancel_current("memory")
             action = "generatie gestopt om geheugen vrij te maken"
