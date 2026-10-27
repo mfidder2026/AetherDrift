@@ -7,7 +7,7 @@ RES="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
 ENGINE_SRC="${SRCROOT}/../engine"
 
 mkdir -p "${RES}/engine" "${RES}/bin"
-rsync -a --delete --exclude '__pycache__' --exclude '*.pyc' \
+rsync -a --delete --delete-excluded --exclude '__pycache__' --exclude '*.pyc' \
   "${ENGINE_SRC}/aether" "${RES}/engine/"
 cp "${ENGINE_SRC}/pyproject.toml" "${ENGINE_SRC}/uv.lock" "${RES}/engine/"
 
